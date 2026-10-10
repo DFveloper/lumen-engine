@@ -4,8 +4,8 @@
     {
       "repository": "huggingface/transformers",
       "revision": "a08ace4bbd97e721c98751deec37d87b026acadc",
-      "path": "tests/models/gemma4//init/.py",
-      "url": "https://raw.githubusercontent.com/huggingface/transformers/a08ace4bbd97e721c98751deec37d87b026acadc/tests/models/gemma4//init/.py",
+      "path": "tests/models/gemma4/__init__.py",
+      "url": "https://raw.githubusercontent.com/huggingface/transformers/a08ace4bbd97e721c98751deec37d87b026acadc/tests/models/gemma4/__init__.py",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tests": []
     },
@@ -434,8 +434,8 @@
     {
       "repository": "huggingface/transformers",
       "revision": "a08ace4bbd97e721c98751deec37d87b026acadc",
-      "path": "tests/models/gemma4_assistant//init/.py",
-      "url": "https://raw.githubusercontent.com/huggingface/transformers/a08ace4bbd97e721c98751deec37d87b026acadc/tests/models/gemma4_assistant//init/.py",
+      "path": "tests/models/gemma4_assistant/__init__.py",
+      "url": "https://raw.githubusercontent.com/huggingface/transformers/a08ace4bbd97e721c98751deec37d87b026acadc/tests/models/gemma4_assistant/__init__.py",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tests": []
     },
@@ -461,8 +461,8 @@
     {
       "repository": "huggingface/transformers",
       "revision": "a08ace4bbd97e721c98751deec37d87b026acadc",
-      "path": "tests/models/gemma4_unified//init/.py",
-      "url": "https://raw.githubusercontent.com/huggingface/transformers/a08ace4bbd97e721c98751deec37d87b026acadc/tests/models/gemma4_unified//init/.py",
+      "path": "tests/models/gemma4_unified/__init__.py",
+      "url": "https://raw.githubusercontent.com/huggingface/transformers/a08ace4bbd97e721c98751deec37d87b026acadc/tests/models/gemma4_unified/__init__.py",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tests": []
     },
@@ -792,8 +792,8 @@
     {
       "repository": "huggingface/transformers",
       "revision": "a08ace4bbd97e721c98751deec37d87b026acadc",
-      "path": "tests/models/gemma4_unified_assistant//init/.py",
-      "url": "https://raw.githubusercontent.com/huggingface/transformers/a08ace4bbd97e721c98751deec37d87b026acadc/tests/models/gemma4_unified_assistant//init/.py",
+      "path": "tests/models/gemma4_unified_assistant/__init__.py",
+      "url": "https://raw.githubusercontent.com/huggingface/transformers/a08ace4bbd97e721c98751deec37d87b026acadc/tests/models/gemma4_unified_assistant/__init__.py",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "tests": []
     },

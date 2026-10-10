@@ -1,5 +1,6 @@
 """Strict CPU-only contract tests; synthetic reports are not inference evidence."""
 import copy
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -38,6 +39,124 @@ class ManifestTests(unittest.TestCase):
                         token_mismatches=0, integer_mismatches=0,
                         max_abs_error=0.0, max_rel_error=0.0)
                    for name in validator.MANDATORY_CASES])
+
+    def test_invalid_schema_versions(self):
+        for value in [True, False, 1.0, 1.5, '1', None, [], {}, 0, 2, -1]:
+            with self.subTest(value=value):
+                self.metadata['schema_version'] = value
+                self.save()
+                with self.assertRaisesRegex(ValueError, '^unsupported schema_version$'):
+                    validator.validate_metadata(self.path)
+
+    def corrupt_same_length_fixture(self):
+        path = self.root / 'processor_config.json'
+        original = path.read_bytes()
+        # JSON whitespace changes bytes without changing size or parsed values.
+        changed = original.replace(b' ', b'\t', 1)
+        self.assertNotEqual(original, changed)
+        self.assertEqual(len(original), len(changed))
+        self.assertEqual(json.loads(original), json.loads(changed))
+        path.write_bytes(changed)
+        return path, changed
+
+    def test_same_length_fixture_corruption(self):
+        self.corrupt_same_length_fixture()
+        with self.assertRaisesRegex(ValueError, '^processor_config.json: hash mismatch$'):
+            validator.validate_metadata(self.path)
+
+    def test_coordinated_fixture_and_manifest_replacement(self):
+        path, changed = self.corrupt_same_length_fixture()
+        entry = next(e for e in self.metadata['files'] if e['file'] == path.name)
+        entry['sha256'] = hashlib.sha256(changed).hexdigest()
+        self.save()
+        with self.assertRaisesRegex(ValueError, '^processor_config.json: fixture pin mismatch$'):
+            validator.validate_metadata(self.path)
+
+    def test_same_cardinality_duplicate_and_unknown_cases(self):
+        for name in [validator.MANDATORY_CASES[1], 'unknown_case']:
+            with self.subTest(name=name):
+                report = self.report()
+                report['cases'][0]['id'] = name
+                self.assertEqual(len(report['cases']), len(validator.MANDATORY_CASES))
+                with self.assertRaisesRegex(ValueError, '^unknown or duplicate case$'):
+                    validator.validate_report_structure(report)
+
+    def test_noninteger_counts(self):
+        for key, values in [('executed', [True, 1.0, 1.5]),
+                            ('skipped', [False, 0.0, 0.5])]:
+            for value in values:
+                with self.subTest(key=key, value=value):
+                    report = self.report()
+                    report['cases'][0][key] = value
+                    with self.assertRaisesRegex(ValueError, f'^text_prefill: invalid {key}$'):
+                        validator.validate_report_structure(report)
+
+    def test_runtime_validates_structure_before_pending(self):
+        report = self.report()
+        report['cases'][0]['executed'] = True
+        with self.assertRaisesRegex(ValueError, '^text_prefill: invalid executed$'):
+            validator.validate_runtime(report)
+
+    def run_cli(self, *args):
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), '--metadata', str(self.path), *args],
+            capture_output=True, text=True)
+
+    def test_cli_metadata_validation_is_reached(self):
+        self.metadata['schema_version'] = True
+        self.save()
+        report = self.root / 'report.json'
+        report.write_text(json.dumps(self.report()))
+        for args in [('--offline',), ('--report', str(report))]:
+            with self.subTest(args=args):
+                result = self.run_cli(*args)
+                self.assertEqual(result.returncode, 1)
+                self.assertEqual(result.stderr, 'FAIL: unsupported schema_version\n')
+                self.assertEqual(result.stdout, '')
+
+    def test_cli_report_validation_is_reached(self):
+        report = self.report()
+        report['cases'][0]['id'] = 'unknown_case'
+        path = self.root / 'report.json'
+        path.write_text(json.dumps(report))
+        result = self.run_cli('--report', str(path))
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr, 'FAIL: unknown or duplicate case\n')
+        self.assertEqual(result.stdout, '')
+
+    def test_cli_valid_structure_reaches_pending_barrier(self):
+        path = self.root / 'report.json'
+        path.write_text(json.dumps(self.report()))
+        result = self.run_cli('--report', str(path))
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stderr,
+                         'FAIL: PENDING: numeric processor/tower bars and measured oracle '
+                         'compatibility are unresolved; runtime acceptance is disabled\n')
+        self.assertEqual(result.stdout, '')
+
+    def test_upstream_inventory_literal_paths_and_urls(self):
+        inventory = json.loads((FIXTURES / 'upstream-tests.json').read_text())
+        expected = {
+            'tests/models/gemma4/__init__.py',
+            'tests/models/gemma4_assistant/__init__.py',
+            'tests/models/gemma4_unified/__init__.py',
+            'tests/models/gemma4_unified_assistant/__init__.py',
+        }
+        entries = inventory['files']
+        self.assertTrue(expected.issubset({e['path'] for e in entries}))
+        for entry in entries:
+            with self.subTest(path=entry['path']):
+                self.assertNotIn('//', entry['path'])
+                self.assertEqual(entry['revision'], {
+                    'huggingface/transformers': validator.TRANSFORMERS_REVISION,
+                    'vllm-project/vllm': validator.VLLM_REVISION,
+                }[entry['repository']])
+                self.assertEqual(entry['url'],
+                                 f"https://raw.githubusercontent.com/{entry['repository']}/"
+                                 f"{entry['revision']}/{entry['path']}")
+                if entry['path'] in expected:
+                    self.assertEqual(entry['sha256'], hashlib.sha256(b'').hexdigest())
+                    self.assertEqual(entry['tests'], [])
 
     def test_original_metadata(self):
         self.assertEqual(validator.validate_metadata(self.path)['model_id'], validator.MODEL_ID)
