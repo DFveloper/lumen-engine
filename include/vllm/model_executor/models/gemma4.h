@@ -46,6 +46,7 @@
 // nuance for the strict gate.
 #pragma once
 
+#include "vllm/model_executor/models/gemma4_vision.h"
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -119,6 +120,8 @@ struct Gemma4ModalityWeights {
 };
 
 struct Gemma4Weights {
+  // Partial inventory only: patch tensors; blocks/clipping are not loaded yet.
+  multimodal::Gemma4VisionWeights vision_patch_weights;
   Gemma4ModalityWeights vision;
   Gemma4ModalityWeights audio;
   bool tie_word_embeddings = true;

@@ -298,3 +298,26 @@ remains pending and prohibited by the current task. No inference claim follows.
 The parent reports projector rootbg296 PASS (16 cases / 192 assertions and 28
 metadata tests) and independent reviewer7892d92a PASS (13 mutations, copy-mode
 and header checks). That slice is reviewed; T02 remains PARTIAL.
+
+### Patch inventory verification
+
+Both decoder loader overloads retain owned input-projection BF16 bits and
+exactly widened position-table values in `vision_patch_weights`. Config remains
+in `vision.config`. This partial representation deliberately leaves blocks and
+embed_projection empty; the projector remains in its existing owned field.
+The dense materializer is unchanged: scaled FP8 matrices work; rank-three FP8
+position tables remain explicitly rejected, not newly supported.
+
+Red: 18 cases, 48 failed assertions, original 16 cases passing. Green: 20 cases,
+356 assertions, zero skips, exact-count CTest PASS. Both overloads cover missing
+inventory, malformed config/shapes/dtypes, overflow, absent modality, ownership
+past shard destruction, raw layout and nonunit FP8 scaling. Seven direct shared
+header consumers passed syntax-only compilation. All 28 metadata tests, record,
+anchor and whitespace checks pass. Evidence: control-room
+`assets/work/2026-10-10-e4b-vision`; captured pinned Transformers source SHA-256
+`ccab8e2dd80b71e9ca34e2c87291e17c40a27c755006e554da2ebf70d6616916`.
+
+T02 remains PARTIAL. Independent review and root verification of this patch
+slice are pending. Encoder blocks, full typed tower config, clipping scalars,
+audio tower and executable encoder/hook wiring remain owed. No inference,
+original-weight, GPU or full-preflight claim follows from retention.

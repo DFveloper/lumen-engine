@@ -379,6 +379,48 @@ Gemma4ModalityWeights LoadModalityProjector(
   return w;
 }
 
+// Pinned Transformers a08ace4b modeling_gemma4.py:579-588.
+// This is patch inventory, not an executable encoder (blocks/clips remain owed).
+multimodal::Gemma4VisionWeights LoadVisionPatches(
+    const TensorResolver& get, const nlohmann::json& cfg) {
+  multimodal::Gemma4VisionWeights w;
+  if (cfg.is_null()) return w;
+  const auto positive = [&](const char* key) {
+    const auto it = cfg.find(key);
+    VT_CHECK(it != cfg.end() && it->is_number_integer() && *it > 0 && *it <= INT64_MAX,
+             std::string("gemma4: vision_config ") + key + " must be a positive integer");
+    return it->get<int64_t>();
+  };
+  const auto h = positive("hidden_size");
+  const auto patch = positive("patch_size");
+  const auto positions = positive("position_embedding_size");
+  VT_CHECK(patch <= INT64_MAX / 3 / patch,
+           "gemma4: vision_config patch_size overflow");
+  const int64_t dim = 3 * patch * patch;
+  VT_CHECK(h <= INT64_MAX / 2 / dim,
+           "gemma4: vision_config patch_size tensor size overflow");
+  VT_CHECK(positions <= INT64_MAX / 8 / h,
+           "gemma4: vision_config position_embedding_size tensor size overflow");
+  const std::string prefix = "model.vision_tower.patch_embedder.";
+  const auto load = [&](const std::string& suffix, const std::vector<int64_t>& shape) {
+    const auto name = prefix + suffix;
+    VT_CHECK(get(name).shape == shape, "gemma4: " + name + " incorrect shape");
+    return LoadBf16Direct(get, name);
+  };
+  auto input = load("input_proj.weight", {h, dim});
+  w.input_proj.resize(input.bytes.size() / sizeof(uint16_t));
+  std::memcpy(w.input_proj.data(), input.bytes.data(), input.bytes.size());
+  auto position = load("position_embedding_table", {2, positions, h});
+  w.position_embedding_table.resize(position.bytes.size() / sizeof(uint16_t));
+  // Existing representation's documented host position-lookup F32 exception.
+  for (size_t i = 0; i < w.position_embedding_table.size(); ++i) {
+    uint16_t bits;
+    std::memcpy(&bits, position.bytes.data() + i * sizeof(bits), sizeof(bits));
+    w.position_embedding_table[i] = vt::BF16ToF32(bits);
+  }
+  return w;
+}
+
 Gemma4Weights LoadImpl(const std::vector<SafetensorsFile>& shards,
                        const HfConfig& config,
                        std::shared_ptr<const void> shards_owner) {
@@ -445,6 +487,7 @@ Gemma4Weights LoadImpl(const std::vector<SafetensorsFile>& shards,
 
   w.vision = LoadModalityProjector(get, config, "vision_config", "model.embed_vision", false);
   w.audio = LoadModalityProjector(get, config, "audio_config", "model.embed_audio", true);
+  w.vision_patch_weights = LoadVisionPatches(get, w.vision.config);
 
   // Keep shards alive for borrowed experts
   w.shards_keepalive = shards_owner;

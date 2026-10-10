@@ -26,6 +26,8 @@ struct Fixture {
     }
     if (directory.empty()) throw std::runtime_error("cannot create fixture directory");
     path = directory / "model.safetensors";
+    add("model.vision_tower.patch_embedder.input_proj.weight", {3, 3});
+    add("model.vision_tower.patch_embedder.position_embedding_table", {2, 2, 3});
     add("model.language_model.embed_tokens.weight", {3, 2});
     add("model.language_model.norm.weight", {2});
     const std::string p = "model.language_model.layers.0.";
@@ -172,7 +174,7 @@ const std::string vision_proj = "model.embed_vision.embedding_projection.weight"
 const std::string audio_proj = "model.embed_audio.embedding_projection.weight";
 vllm::HfConfig mm_config() {
   auto c = config();
-  c.raw["vision_config"] = {{"hidden_size", 3}, {"rms_norm_eps", 1e-6},
+  c.raw["vision_config"] = {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6},
                             {"use_clipped_linears", true}};
   c.raw["audio_config"] = {{"hidden_size", 4}, {"output_proj_dims", 5},
                            {"rms_norm_eps", 1e-6}};
@@ -202,7 +204,7 @@ TEST_CASE("E4B projectors: malformed config is refused by both loaders") {
     for (const auto* field : {"hidden_size", "rms_norm_eps"}) {
       for (const json& bad : std::vector<json>{nullptr, false, -1, 0, "bad"}) {
         Fixture f; auto c = config();
-        c.raw[key] = {{"hidden_size", 3}, {"rms_norm_eps", 1e-6}};
+        c.raw[key] = {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6}};
         c.raw[key][field] = bad;
         reject_mm(f, c, field);
       }
@@ -218,10 +220,10 @@ TEST_CASE("E4B projectors: exact rank and orientation are required") {
   for (const auto* key : {"vision_config", "audio_config"}) {
     const auto name = std::string(key) == "vision_config" ? vision_proj : audio_proj;
     for (const auto& shape : std::vector<std::vector<int64_t>>{{3, 2}, {6}, {2, 1}}) {
-      Fixture f; auto c = config(); c.raw[key] = {{"hidden_size", 3}, {"rms_norm_eps", 1e-6}};
+      Fixture f; auto c = config(); c.raw[key] = {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6}};
       f.add(name, shape); reject_mm(f, c, name);
     }
-    Fixture f; auto c = config(); c.raw[key] = {{"hidden_size", 3}, {"rms_norm_eps", 1e-6}};
+    Fixture f; auto c = config(); c.raw[key] = {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6}};
     f.add(name, {2, 3}); f.header[name]["dtype"] = "F16";
     reject_mm(f, c, "BF16");
   }
@@ -261,7 +263,7 @@ TEST_CASE("E4B projectors: null modalities and audio output width fallback") {
   CHECK(w.vision.config.is_null()); CHECK(w.audio.embedding_projection.bytes.empty());
   for (const json& output : std::vector<json>{nullptr, 0, 3}) {
     Fixture a; a.add(audio_proj, {2, 3}); auto ac = config();
-    ac.raw["audio_config"] = {{"hidden_size", 3}, {"rms_norm_eps", 1e-6}, {"output_proj_dims", output}};
+    ac.raw["audio_config"] = {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6}, {"output_proj_dims", output}};
     auto as = a.open(); auto aw = vllm::LoadGemma4ForConditionalGenerationWeights(as, ac);
     CHECK(aw.audio.embedding_projection.shape[1] == 3);
     ac.raw["audio_config"].erase("output_proj_dims");
@@ -280,7 +282,7 @@ TEST_CASE("E4B projectors: scaled FP8 materialization remains supported") {
   for (const auto& name : {vision_proj, audio_proj}) {
     Fixture f; auto c = config();
     c.raw[name == vision_proj ? "vision_config" : "audio_config"] =
-        {{"hidden_size", 3}, {"rms_norm_eps", 1e-6}};
+        {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6}};
     const size_t start = f.bytes.size(); f.bytes.append(6, '\x38'); // E4M3 1.0
     f.header[name] = {{"dtype", "F8_E4M3"}, {"shape", {2, 3}}, {"data_offsets", {start, start+6}}};
     f.add(name + "_scale", {1}); // BF16 1.0
@@ -291,4 +293,112 @@ TEST_CASE("E4B projectors: scaled FP8 materialization remains supported") {
     uint16_t values[6]; std::memcpy(values, p.bytes.data(), 12);
     for (auto v : values) CHECK(v == 0x3f80);
   }
+}
+
+namespace {
+const std::string patch_input = "model.vision_tower.patch_embedder.input_proj.weight";
+const std::string patch_position = "model.vision_tower.patch_embedder.position_embedding_table";
+vllm::HfConfig patch_config() {
+  auto c = config();
+  c.raw["vision_config"] = {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6},
+      {"patch_size", 1}, {"position_embedding_size", 2}};
+  return c;
+}
+}
+TEST_CASE("E4B vision patches: required inventory is not silently discarded") {
+  Fixture f; f.add(vision_proj, {2, 3}); auto c = patch_config();
+  f.header.erase(patch_input); f.header.erase(patch_position);
+  reject_mm(f, c, patch_input);
+  f.add(patch_input, {3, 3}); reject_mm(f, c, patch_position);
+}
+TEST_CASE("E4B vision patches: malformed config shapes and dtype are refused") {
+  for (const auto* key : {"patch_size", "position_embedding_size"}) {
+    for (const json& value : std::vector<json>{nullptr, false, 0, -1, 1.5, "bad", UINT64_MAX}) {
+      Fixture f; f.add(vision_proj, {2, 3}); auto c = patch_config();
+      c.raw["vision_config"][key] = value; reject_mm(f, c, key);
+    }
+    Fixture f; f.add(vision_proj, {2, 3}); auto c = patch_config();
+    c.raw["vision_config"].erase(key); reject_mm(f, c, key);
+  }
+  for (const auto& name : {patch_input, patch_position}) {
+    for (int defect = 0; defect < 3; ++defect) {
+      Fixture f; f.add(vision_proj, {2, 3});
+      f.add(patch_input, {3, 3}); f.add(patch_position, {2, 2, 3});
+      if (defect == 0) f.header[name]["shape"] = name == patch_input ? json{9} : json{12};
+      if (defect == 1) f.header[name]["shape"] = name == patch_input ? json{1, 9} : json{3, 2, 2};
+      if (defect == 2) f.header[name]["dtype"] = "F16";
+      reject_mm(f, patch_config(), defect == 2 ? "BF16" : name);
+    }
+  }
+}
+TEST_CASE("E4B vision patches: owned raw layout and FP8 scaling survive shard destruction") {
+  for (bool owned : {false, true}) {
+    for (bool fp8 : {false, true}) {
+      vllm::Gemma4Weights w;
+      auto c = patch_config();
+      {
+        Fixture f; f.add(vision_proj, {2, 3});
+        for (const auto& name : {patch_input, patch_position}) {
+          const size_t count = name == patch_input ? 9 : 12;
+          const size_t start = f.bytes.size();
+          if (fp8 && name == patch_input) {
+            f.bytes.append(count, '\x38'); // E4M3 1.0, scale 2.0
+            f.header[name]["dtype"] = "F8_E4M3";
+            f.header[name]["data_offsets"] = {start, start + count};
+            f.add(name + "_scale", {1});
+            f.bytes[f.bytes.size()-2] = 0; f.bytes.back() = '\x40';
+          } else {
+            for (size_t i = 0; i < count; ++i) {
+              f.bytes.push_back(char(i)); f.bytes.push_back('\x3f');
+            }
+            f.header[name]["data_offsets"] = {start, start + count*2};
+          }
+        }
+        auto shards = f.open();
+        w = owned ? vllm::LoadGemma4ForConditionalGenerationWeightsOwned(
+            std::make_shared<const std::vector<vllm::SafetensorsFile>>(std::move(shards)), c)
+            : vllm::LoadGemma4ForConditionalGenerationWeights(shards, c);
+      }
+      CHECK(w.vision.config == c.raw["vision_config"]);
+      const auto& patch = w.vision_patch_weights;
+      REQUIRE(patch.input_proj.size() == 9);
+      REQUIRE(patch.position_embedding_table.size() == 12);
+      CHECK(patch.blocks.empty()); CHECK(patch.embed_projection.empty());
+      for (size_t i = 0; i < patch.input_proj.size(); ++i)
+        CHECK(patch.input_proj[i] == (fp8 ? 0x4000 : 0x3f00 + i));
+      for (size_t i = 0; i < patch.position_embedding_table.size(); ++i)
+        CHECK(patch.position_embedding_table[i] == vt::BF16ToF32(uint16_t(0x3f00 + i)));
+    }
+  }
+}
+TEST_CASE("E4B vision patches: absent modality and dimension overflow stay bounded") {
+  for (bool owned : {false, true}) {
+    Fixture f; auto c = config();
+    f.header.erase(patch_input); f.header.erase(patch_position);
+    auto shards = f.open();
+    auto w = owned ? vllm::LoadGemma4ForConditionalGenerationWeightsOwned(
+        std::make_shared<const std::vector<vllm::SafetensorsFile>>(std::move(shards)), c)
+        : vllm::LoadGemma4ForConditionalGenerationWeights(shards, c);
+    CHECK(w.vision_patch_weights.input_proj.empty());
+    CHECK(w.vision_patch_weights.position_embedding_table.empty());
+  }
+  for (const auto* key : {"patch_size", "position_embedding_size"}) {
+    Fixture f; f.add(vision_proj, {2, 3}); auto c = patch_config();
+    c.raw["vision_config"][key] = INT64_MAX;
+    reject_mm(f, c, key);
+  }
+  // The dense materializer supports FP8 matrices, not rank-three tables.
+  {
+    Fixture f; f.add(vision_proj, {2, 3});
+    const size_t start = f.bytes.size(); f.bytes.append(12, '\x38');
+    f.header[patch_position]["dtype"] = "F8_E4M3";
+    f.header[patch_position]["data_offsets"] = {start, start + 12};
+    f.add(patch_position + "_scale", {1});
+    reject_mm(f, patch_config(), "expected 2-D weight for FP8");
+  }
+  auto original = vllm::LoadHfConfig(E4B_CONFIG_PATH);
+  Fixture f; f.add(vision_proj, {2, 3}); auto c = patch_config();
+  c.raw["vision_config"]["patch_size"] = original.raw["vision_config"]["patch_size"];
+  c.raw["vision_config"]["position_embedding_size"] = original.raw["vision_config"]["position_embedding_size"];
+  reject_mm(f, c, patch_input);
 }
