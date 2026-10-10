@@ -111,7 +111,16 @@ struct Gemma4LayerWeights {
 // Whole Gemma-4 text-model weights. tie_word_embeddings defaults TRUE (lm_head
 // aliases embed_tokens; the checkpoint has no lm_head.weight). PLE tables live at
 // model level (gemma4.py:986-1063).
+// Staged connector storage: owned raw [text_hidden, encoder_output] BF16.
+// Encoder execution and hook integration remain owed by the E4B baseline spec.
+struct Gemma4ModalityWeights {
+  nlohmann::json config;  // null when absent; retain encoder and clipping fields
+  OwnedTensor embedding_projection;
+};
+
 struct Gemma4Weights {
+  Gemma4ModalityWeights vision;
+  Gemma4ModalityWeights audio;
   bool tie_word_embeddings = true;
   OwnedTensor embed_tokens;             // bf16 [vocab, H]  (scaled by sqrt(H) at use)
   OwnedTensor embed_tokens_per_layer;   // bf16 [vocab, ple_dim*num_layers]

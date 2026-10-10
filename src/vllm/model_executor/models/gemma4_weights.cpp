@@ -341,6 +341,44 @@ Gemma4LayerWeights LoadGemma4Layer(
   return w;
 }
 
+// vLLM gemma4_mm.py::Gemma4MultimodalEmbedder at a7c23ac96d:
+// biasless projection from encoder output to text hidden, with weightless norm.
+Gemma4ModalityWeights LoadModalityProjector(
+    const TensorResolver& get, const HfConfig& config, const char* key,
+    const char* prefix, bool audio) {
+  Gemma4ModalityWeights w;
+  const auto it = config.raw.find(key);
+  if (it == config.raw.end() || it->is_null()) return w;
+  const std::string context = std::string("gemma4: ") + key;
+  VT_CHECK(it->is_object(), context + " must be an object or null");
+  const auto& cfg = *it;
+  const auto hidden = cfg.find("hidden_size");
+  VT_CHECK(hidden != cfg.end() && hidden->is_number_integer() &&
+               *hidden > 0 && *hidden <= INT64_MAX,
+           context + " hidden_size must be a positive integer");
+  int64_t width = hidden->get<int64_t>();
+  const auto eps = cfg.find("rms_norm_eps");
+  VT_CHECK(eps != cfg.end() && eps->is_number() &&
+               std::isfinite(eps->get<double>()) && eps->get<double>() > 0,
+           context + " rms_norm_eps must be positive and finite");
+  if (audio) {
+    const auto output = cfg.find("output_proj_dims");
+    if (output != cfg.end() && !output->is_null()) {
+      VT_CHECK(output->is_number_integer() && *output >= 0 && *output <= INT64_MAX,
+               context + " output_proj_dims must be a nonnegative integer or null");
+      if (*output != 0) width = output->get<int64_t>();
+    }
+  }
+  VT_CHECK(config.hidden_size > 0, context + " text hidden_size must be positive");
+  const std::string name = std::string(prefix) + ".embedding_projection.weight";
+  const auto& tensor = get(name);
+  VT_CHECK((tensor.shape == std::vector<int64_t>{config.hidden_size, width}),
+           "gemma4: " + name + " must have shape [text_hidden, encoder_output]");
+  w.config = cfg;
+  w.embedding_projection = LoadBf16Direct(get, name);
+  return w;
+}
+
 Gemma4Weights LoadImpl(const std::vector<SafetensorsFile>& shards,
                        const HfConfig& config,
                        std::shared_ptr<const void> shards_owner) {
@@ -404,6 +442,9 @@ Gemma4Weights LoadImpl(const std::vector<SafetensorsFile>& shards,
              "gemma4: lm_head.weight must have shape [vocab_size, hidden_size]");
     w.lm_head = LoadBf16Transposed(get, "lm_head.weight");
   }
+
+  w.vision = LoadModalityProjector(get, config, "vision_config", "model.embed_vision", false);
+  w.audio = LoadModalityProjector(get, config, "audio_config", "model.embed_audio", true);
 
   // Keep shards alive for borrowed experts
   w.shards_keepalive = shards_owner;

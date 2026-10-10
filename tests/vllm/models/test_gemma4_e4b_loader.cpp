@@ -166,3 +166,129 @@ TEST_CASE("E4B loader: head rejection uses original E4B config dimensions") {
   CHECK_THROWS_WITH(vllm::LoadGemma4ForConditionalGenerationWeights(shards, c),
                     doctest::Contains("lm_head.weight"));
 }
+
+namespace {
+const std::string vision_proj = "model.embed_vision.embedding_projection.weight";
+const std::string audio_proj = "model.embed_audio.embedding_projection.weight";
+vllm::HfConfig mm_config() {
+  auto c = config();
+  c.raw["vision_config"] = {{"hidden_size", 3}, {"rms_norm_eps", 1e-6},
+                            {"use_clipped_linears", true}};
+  c.raw["audio_config"] = {{"hidden_size", 4}, {"output_proj_dims", 5},
+                           {"rms_norm_eps", 1e-6}};
+  return c;
+}
+void reject_mm(Fixture& f, const vllm::HfConfig& c, const std::string& diagnostic) {
+  auto shards = f.open();
+  CHECK_THROWS_WITH(vllm::LoadGemma4ForConditionalGenerationWeights(shards, c),
+                    doctest::Contains(diagnostic));
+  auto owned = std::make_shared<const std::vector<vllm::SafetensorsFile>>(std::move(shards));
+  CHECK_THROWS_WITH(vllm::LoadGemma4ForConditionalGenerationWeightsOwned(owned, c),
+                    doctest::Contains(diagnostic));
+}
+}
+TEST_CASE("E4B projectors: configured modalities require their weights") {
+  Fixture f; auto c = mm_config();
+  reject_mm(f, c, vision_proj);
+  f.add(vision_proj, {2, 3});
+  reject_mm(f, c, audio_proj);
+}
+TEST_CASE("E4B projectors: malformed config is refused by both loaders") {
+  for (const auto* key : {"vision_config", "audio_config"}) {
+    for (const json& bad : std::vector<json>{false, 7, "bad", json::array()}) {
+      Fixture f; auto c = config(); c.raw[key] = bad;
+      reject_mm(f, c, key);
+    }
+    for (const auto* field : {"hidden_size", "rms_norm_eps"}) {
+      for (const json& bad : std::vector<json>{nullptr, false, -1, 0, "bad"}) {
+        Fixture f; auto c = config();
+        c.raw[key] = {{"hidden_size", 3}, {"rms_norm_eps", 1e-6}};
+        c.raw[key][field] = bad;
+        reject_mm(f, c, field);
+      }
+    }
+  }
+  for (const json& bad : std::vector<json>{false, -1, 1.5, "bad"}) {
+    Fixture f; auto c = config(); c.raw["audio_config"] = mm_config().raw["audio_config"];
+    c.raw["audio_config"]["output_proj_dims"] = bad;
+    reject_mm(f, c, "output_proj_dims");
+  }
+}
+TEST_CASE("E4B projectors: exact rank and orientation are required") {
+  for (const auto* key : {"vision_config", "audio_config"}) {
+    const auto name = std::string(key) == "vision_config" ? vision_proj : audio_proj;
+    for (const auto& shape : std::vector<std::vector<int64_t>>{{3, 2}, {6}, {2, 1}}) {
+      Fixture f; auto c = config(); c.raw[key] = {{"hidden_size", 3}, {"rms_norm_eps", 1e-6}};
+      f.add(name, shape); reject_mm(f, c, name);
+    }
+    Fixture f; auto c = config(); c.raw[key] = {{"hidden_size", 3}, {"rms_norm_eps", 1e-6}};
+    f.add(name, {2, 3}); f.header[name]["dtype"] = "F16";
+    reject_mm(f, c, "BF16");
+  }
+}
+TEST_CASE("E4B projectors: owned raw BF16 layout and full config survive shard destruction") {
+  for (bool owned : {false, true}) {
+    vllm::Gemma4Weights w;
+    auto c = mm_config();
+    {
+      Fixture f; f.add(vision_proj, {2, 3}); f.add(audio_proj, {2, 5});
+      const size_t start = f.header[vision_proj]["data_offsets"][0].get<size_t>();
+      for (size_t i = 0; i < 6; ++i) {
+        f.bytes[start + 2*i] = 0; f.bytes[start + 2*i + 1] = char(0x3f + i);
+      }
+      auto shards = f.open();
+      w = owned ? vllm::LoadGemma4ForConditionalGenerationWeightsOwned(
+          std::make_shared<const std::vector<vllm::SafetensorsFile>>(std::move(shards)), c)
+          : vllm::LoadGemma4ForConditionalGenerationWeights(shards, c);
+    }
+    CHECK(w.vision.config == c.raw["vision_config"]);
+    CHECK(w.audio.config == c.raw["audio_config"]);
+    for (const auto* p : {&w.vision.embedding_projection, &w.audio.embedding_projection}) {
+      CHECK(p->dtype == vt::DType::kBF16); CHECK(p->rank == 2); CHECK(p->shape[0] == 2);
+    }
+    CHECK(w.vision.embedding_projection.shape[1] == 3);
+    CHECK(w.audio.embedding_projection.shape[1] == 5);
+    REQUIRE(w.vision.embedding_projection.bytes.size() == 12);
+    REQUIRE(w.audio.embedding_projection.bytes.size() == 20);
+    uint16_t values[6]; std::memcpy(values, w.vision.embedding_projection.bytes.data(), 12);
+    for (size_t i = 0; i < 6; ++i) CHECK(values[i] == ((0x3f + i) << 8));
+  }
+}
+TEST_CASE("E4B projectors: null modalities and audio output width fallback") {
+  Fixture f; auto c = config(); c.raw["vision_config"] = nullptr; c.raw["audio_config"] = nullptr;
+  auto shards = f.open();
+  auto w = vllm::LoadGemma4ForConditionalGenerationWeights(shards, c);
+  CHECK(w.vision.config.is_null()); CHECK(w.audio.embedding_projection.bytes.empty());
+  for (const json& output : std::vector<json>{nullptr, 0, 3}) {
+    Fixture a; a.add(audio_proj, {2, 3}); auto ac = config();
+    ac.raw["audio_config"] = {{"hidden_size", 3}, {"rms_norm_eps", 1e-6}, {"output_proj_dims", output}};
+    auto as = a.open(); auto aw = vllm::LoadGemma4ForConditionalGenerationWeights(as, ac);
+    CHECK(aw.audio.embedding_projection.shape[1] == 3);
+    ac.raw["audio_config"].erase("output_proj_dims");
+    CHECK(vllm::LoadGemma4ForConditionalGenerationWeights(as, ac).audio.embedding_projection.bytes.size() == 12);
+  }
+}
+TEST_CASE("E4B projectors: original config dimensions reject tiny projector without allocation") {
+  auto original = vllm::LoadHfConfig(E4B_CONFIG_PATH);
+  for (const auto* key : {"vision_config", "audio_config"}) {
+    auto c = config(); c.raw[key] = original.raw[key]; c.hidden_size = original.hidden_size;
+    Fixture f; f.add(std::string(key) == "vision_config" ? vision_proj : audio_proj, {2, 3});
+    reject_mm(f, c, "encoder_output");
+  }
+}
+TEST_CASE("E4B projectors: scaled FP8 materialization remains supported") {
+  for (const auto& name : {vision_proj, audio_proj}) {
+    Fixture f; auto c = config();
+    c.raw[name == vision_proj ? "vision_config" : "audio_config"] =
+        {{"hidden_size", 3}, {"rms_norm_eps", 1e-6}};
+    const size_t start = f.bytes.size(); f.bytes.append(6, '\x38'); // E4M3 1.0
+    f.header[name] = {{"dtype", "F8_E4M3"}, {"shape", {2, 3}}, {"data_offsets", {start, start+6}}};
+    f.add(name + "_scale", {1}); // BF16 1.0
+    auto shards = f.open();
+    auto w = vllm::LoadGemma4ForConditionalGenerationWeights(shards, c);
+    const auto& p = name == vision_proj ? w.vision.embedding_projection : w.audio.embedding_projection;
+    REQUIRE(p.bytes.size() == 12); CHECK(p.dtype == vt::DType::kBF16);
+    uint16_t values[6]; std::memcpy(values, p.bytes.data(), 12);
+    for (auto v : values) CHECK(v == 0x3f80);
+  }
+}

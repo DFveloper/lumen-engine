@@ -248,3 +248,22 @@ ISSUE-LOCAL-01M4KSETGY63TDEDPF6EHQHRA8 own that wiring. Complete tower inventory
 clipping-scalar loading, full modality validation, original-shape tower fixtures,
 assistant/tools/image/audio/video acceptance, and T12/T13 remain owed.
 Full preflight remains PENDING; another full run is prohibited for this slice.
+
+### Projector slice verification
+
+Both real decoder loader overloads now retain validated config and owned BF16
+projectors in raw checkpoint [out,in] layout (no transpose). Scaled F8_E4M3
+passes through the unchanged dense materializer. The red-before run failed
+84 assertions across three new cases; the original nine cases passed.
+Green passes 16 cases / 192 assertions, zero skips, using the minimal CPU
+target. CTest first rejected the stale nine-case expected count; updating it
+to exactly sixteen restored its zero-skip gate. The 28 metadata regressions
+and offline CLI pass. Evidence: control-room
+`assets/work/2026-10-10-e4b-projectors`.
+
+Root supplied rootbg271 and review24858d PASS for the prior output-head slice
+(9 cases / 44 assertions plus 28 metadata cases). This projector slice awaits
+independent immutable-head review and root verification. T02 remains PARTIAL:
+tower inventory, clipping, full modality validation and encoder/hook wiring
+are owed. No full preflight, GPU, weights download or original-model inference
+ran. Assistant/tools/image/audio/video acceptance is unchanged.
