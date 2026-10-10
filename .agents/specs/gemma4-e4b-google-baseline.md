@@ -102,3 +102,69 @@ Required coverage includes original config and tensor accounting, canonical chat
 ## Work breakdown
 
 T00 creates the OPEN issue and commits this design. T01 pins metadata, validates evidence, enumerates upstream tests, and freezes justified numeric bars. T02 accounts for config and weights. T03 preserves chat and tools. T04, T05, and T06 implement image, audio, and video processing. T07 and T08 wire the vision and audio encoders. T09 wires hooks and the existing runner. T10 exposes raw inputs through the public ABI and serving. T11 creates the strict acceptance harness. T12 measures original-checkpoint reference equivalence. T13 proves production reachability and completes independent review. Each task depends on the previous task. T00 authorizes none of the product edits.
+
+## T01 metadata contract and remaining prerequisites
+
+T01 is PARTIAL. The standard-library validator and tracked original metadata
+fixtures implement the executable CPU scope. Independent SHA-256 pins reject
+self-attested replacement bytes. Strict report validation rejects missing cases,
+skips, nonfinite metrics, identity changes, and integer or token mismatches.
+Offline success explicitly says metadata-only and leaves original-model
+gateability PENDING. Runtime acceptance fails closed even for zero errors.
+No caller-supplied threshold can override this barrier.
+
+The fixture [README](../../tests/fixtures/gemma4_e4b_google/README.md) records
+license, attribution, reproduction, and the report schema. The
+[test inventory](../../tests/fixtures/gemma4_e4b_google/upstream-tests.json)
+enumerates actual declared test symbols and decorators at both immutable pins.
+It includes hashes and source URLs for all Gemma4-named Python test files in the
+pinned repository trees. This is source inspection, not test execution.
+
+Relevant vLLM processing tests include
+`test_gemma4_image_schema_accepts_variable_patch_counts`,
+`test_gemma4_image_batching_keeps_variable_patch_counts_unstacked`,
+`test_compute_num_soft_tokens_does_not_exceed_max_soft_tokens`,
+`test_get_mm_max_tokens_per_item_respects_configured_max_soft_tokens`,
+`test_get_mm_max_tokens_per_item_respects_configured_video_num_frames`,
+`test_get_prompt_updates_respects_nested_max_soft_tokens`,
+`test_video_cache_is_independent_of_image_kwargs`, `test_limit_mm_per_prompt`,
+and the five `test_encoder_chunk_*` cases. Their source is
+`tests/models/multimodal/processing/test_gemma4.py` at the pinned vLLM commit.
+Its `GEMMA4_MODEL_ID` is Google E2B, not E4B. These test declarations do not
+establish exact-E4B runtime compatibility.
+
+At the Transformers pin, `tests/models/gemma4/test_image_processing_gemma4.py`
+checks defaults, resize dimensions, soft-token budgets, positions, and padding.
+`test_processing_gemma4.py` checks vision-token counts, image tokens, truncation,
+multimodal counts, and audio-token counts. It conditionally skips unsupported
+counting capabilities and explicitly skips video-frame sampling.
+`test_modeling_gemma4.py` contains text, image, multi-image, cache-sharing, and
+sliding-window integration tests. Its integration checkpoint is E2B. Its tester
+skips audio and video feature tests because input dictionaries lack those media.
+The inventory preserves the decorators, including skip reasons. Unified and
+assistant model suites are separate variants, not replacement E4B evidence.
+
+Static compatibility evidence: pinned vLLM `requirements/common.txt` requires
+`transformers >= 5.10.4`. Version 5.14.1 satisfies that declared lower bound.
+Pinned vLLM `gemma4_mm.py` imports `Gemma4AudioFeatureExtractor`, `Gemma4Config`,
+`Gemma4Processor`, and `Gemma4VisionConfig`. Pinned Transformers
+`src/transformers/models/gemma4/__init__.py` exposes configuration, feature
+extraction, image, modeling, processing, and video modules through lazy imports.
+These source declarations are not an import smoke test or proof that both
+engines load and execute the original checkpoint together. The checkpoint's
+`transformers_version` is `5.5.0.dev0`, not an installed environment record.
+
+Numeric processor and tower bars remain PENDING. No inspected test supplies a
+complete, justified E4B cross-engine per-stage error envelope. A tolerance for
+another model, backend, or test is not a valid substitute. Before enabling
+runtime acceptance, obtain an authorized pinned environment, verify imports and
+original checkpoint loading, and measure independent oracle repeatability for
+each required stage and dtype. Ratify explicit absolute and relative bounds
+before comparison capture. Keep exact integer identity and zero token divergence.
+T01 cannot be marked done until these prerequisites are resolved and reviewed.
+
+The first focused test run failed because the new validator did not exist.
+After implementation, 18 CPU tests passed without skips. They use original
+metadata and synthetic reports only. No C++ runtime, GPU, weights, or upstream
+runtime tests were executed. Full preflight remains PENDING under the existing
+T00 environmental blockers and the prohibition on another full-suite attempt.
