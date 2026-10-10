@@ -321,3 +321,38 @@ T02 remains PARTIAL. Independent review and root verification of this patch
 slice are pending. Encoder blocks, full typed tower config, clipping scalars,
 audio tower and executable encoder/hook wiring remain owed. No inference,
 original-weight, GPU or full-preflight claim follows from retention.
+
+## T02 vision encoder-block retention
+
+The parent reports rootbg363 and reviewf3c57a74 PASS for the patch slice:
+20 cases, 358 assertions, 28 metadata tests; overflow mutation closed.
+T02 remains PARTIAL. Retain all seven matrices and six learned norms per
+encoder layer through both decoder loader overloads. Retention does not
+establish encoder execution, clipping, audio, or runtime acceptance.
+
+Pinned Transformers a08ace4bbd97e721c98751deec37d87b026acadc
+`modeling_gemma4.py:168-215,692-701,927-954,990-1002,1036-1038`
+defines `model.vision_tower.encoder.layers.{i}.` with attention
+`self_attn.{q,k,v,o}_proj.linear.weight` and MLP
+`mlp.{gate,up,down}_proj.linear.weight`. Shapes are respectively
+[heads*head_dim,H], [kv_heads*head_dim,H] (K and V),
+[H,heads*head_dim], [I,H] (gate and up), and [H,I].
+The four layer norms have shape [H]; `self_attn.{q,k}_norm.weight`
+have shape [head_dim]. V normalization has no learned scale. No biases,
+V norm, rotary buffers, or projector norm tensors are invented. The pinned
+vLLM `gemma4_mm.py:1046-1055` mapper preserves this tower structure.
+
+Keep the existing raw BF16 block representation, including BF16 learned
+norm scales from the BF16 checkpoint (the forward widens for RMS arithmetic).
+Preserve dense matrix scaled-FP8 conversion. Norms require BF16, as the
+existing representation requires; no new F32 checkpoint policy is introduced.
+Validate positive integer layer count, intermediate size, head count,
+KV head count and head dimension, head divisibility, and checked tensor and
+block-vector byte sizes before allocation. Use source dimensions rather than
+assuming H equals heads*head_dim. Full execution config remains pending.
+
+Tiny two-layer original-structure fixtures must distinguish each tensor's
+layout and each layer, survive shard destruction, and reject missing,
+malformed, unsupported-dtype and overflow inputs through both overloads.
+No original weights or large allocations are needed. Preserve patch/projector
+behavior and absent vision. Full preflight remains pending and prohibited.
