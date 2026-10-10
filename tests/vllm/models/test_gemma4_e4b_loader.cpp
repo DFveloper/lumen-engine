@@ -12,6 +12,30 @@
 
 namespace {
 using nlohmann::json;
+using Block = vllm::multimodal::Gemma4VisionBlockWeights;
+struct BlockEntry {
+  const char* name;
+  std::vector<int64_t> shape;
+  std::vector<uint16_t> Block::* member;
+};
+const std::vector<BlockEntry> inventory = {
+  {"self_attn.q_proj.linear.weight", {4, 3}, &Block::q_proj},
+  {"self_attn.k_proj.linear.weight", {2, 3}, &Block::k_proj},
+  {"self_attn.v_proj.linear.weight", {2, 3}, &Block::v_proj},
+  {"self_attn.o_proj.linear.weight", {3, 4}, &Block::o_proj},
+  {"mlp.gate_proj.linear.weight", {5, 3}, &Block::gate_proj},
+  {"mlp.up_proj.linear.weight", {5, 3}, &Block::up_proj},
+  {"mlp.down_proj.linear.weight", {3, 5}, &Block::down_proj},
+  {"input_layernorm.weight", {3}, &Block::input_ln},
+  {"post_attention_layernorm.weight", {3}, &Block::post_attn_ln},
+  {"pre_feedforward_layernorm.weight", {3}, &Block::pre_ff_ln},
+  {"post_feedforward_layernorm.weight", {3}, &Block::post_ff_ln},
+  {"self_attn.q_norm.weight", {2}, &Block::q_norm},
+  {"self_attn.k_norm.weight", {2}, &Block::k_norm},
+};
+std::string block_prefix(int layer) {
+  return "model.vision_tower.encoder.layers." + std::to_string(layer) + ".";
+}
 struct Fixture {
   std::filesystem::path path;
   std::filesystem::path directory;
@@ -28,6 +52,8 @@ struct Fixture {
     path = directory / "model.safetensors";
     add("model.vision_tower.patch_embedder.input_proj.weight", {3, 3});
     add("model.vision_tower.patch_embedder.position_embedding_table", {2, 2, 3});
+    for (int layer = 0; layer < 2; ++layer)
+      for (const auto& e : inventory) add(block_prefix(layer) + e.name, e.shape);
     add("model.language_model.embed_tokens.weight", {3, 2});
     add("model.language_model.norm.weight", {2});
     const std::string p = "model.language_model.layers.0.";
@@ -174,10 +200,10 @@ const std::string vision_proj = "model.embed_vision.embedding_projection.weight"
 const std::string audio_proj = "model.embed_audio.embedding_projection.weight";
 vllm::HfConfig mm_config() {
   auto c = config();
-  c.raw["vision_config"] = {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6},
+  c.raw["vision_config"] = {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6}, {"num_hidden_layers", 2}, {"num_attention_heads", 2}, {"num_key_value_heads", 1}, {"head_dim", 2}, {"intermediate_size", 5},
                             {"use_clipped_linears", true}};
   c.raw["audio_config"] = {{"hidden_size", 4}, {"output_proj_dims", 5},
-                           {"rms_norm_eps", 1e-6}};
+                           {"rms_norm_eps", 1e-6}, {"num_hidden_layers", 2}, {"num_attention_heads", 2}, {"num_key_value_heads", 1}, {"head_dim", 2}, {"intermediate_size", 5}};
   return c;
 }
 void reject_mm(Fixture& f, const vllm::HfConfig& c, const std::string& diagnostic) {
@@ -204,7 +230,7 @@ TEST_CASE("E4B projectors: malformed config is refused by both loaders") {
     for (const auto* field : {"hidden_size", "rms_norm_eps"}) {
       for (const json& bad : std::vector<json>{nullptr, false, -1, 0, "bad"}) {
         Fixture f; auto c = config();
-        c.raw[key] = {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6}};
+        c.raw[key] = {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6}, {"num_hidden_layers", 2}, {"num_attention_heads", 2}, {"num_key_value_heads", 1}, {"head_dim", 2}, {"intermediate_size", 5}};
         c.raw[key][field] = bad;
         reject_mm(f, c, field);
       }
@@ -220,10 +246,10 @@ TEST_CASE("E4B projectors: exact rank and orientation are required") {
   for (const auto* key : {"vision_config", "audio_config"}) {
     const auto name = std::string(key) == "vision_config" ? vision_proj : audio_proj;
     for (const auto& shape : std::vector<std::vector<int64_t>>{{3, 2}, {6}, {2, 1}}) {
-      Fixture f; auto c = config(); c.raw[key] = {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6}};
+      Fixture f; auto c = config(); c.raw[key] = {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6}, {"num_hidden_layers", 2}, {"num_attention_heads", 2}, {"num_key_value_heads", 1}, {"head_dim", 2}, {"intermediate_size", 5}};
       f.add(name, shape); reject_mm(f, c, name);
     }
-    Fixture f; auto c = config(); c.raw[key] = {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6}};
+    Fixture f; auto c = config(); c.raw[key] = {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6}, {"num_hidden_layers", 2}, {"num_attention_heads", 2}, {"num_key_value_heads", 1}, {"head_dim", 2}, {"intermediate_size", 5}};
     f.add(name, {2, 3}); f.header[name]["dtype"] = "F16";
     reject_mm(f, c, "BF16");
   }
@@ -263,7 +289,7 @@ TEST_CASE("E4B projectors: null modalities and audio output width fallback") {
   CHECK(w.vision.config.is_null()); CHECK(w.audio.embedding_projection.bytes.empty());
   for (const json& output : std::vector<json>{nullptr, 0, 3}) {
     Fixture a; a.add(audio_proj, {2, 3}); auto ac = config();
-    ac.raw["audio_config"] = {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6}, {"output_proj_dims", output}};
+    ac.raw["audio_config"] = {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6}, {"num_hidden_layers", 2}, {"num_attention_heads", 2}, {"num_key_value_heads", 1}, {"head_dim", 2}, {"intermediate_size", 5}, {"output_proj_dims", output}};
     auto as = a.open(); auto aw = vllm::LoadGemma4ForConditionalGenerationWeights(as, ac);
     CHECK(aw.audio.embedding_projection.shape[1] == 3);
     ac.raw["audio_config"].erase("output_proj_dims");
@@ -282,7 +308,7 @@ TEST_CASE("E4B projectors: scaled FP8 materialization remains supported") {
   for (const auto& name : {vision_proj, audio_proj}) {
     Fixture f; auto c = config();
     c.raw[name == vision_proj ? "vision_config" : "audio_config"] =
-        {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6}};
+        {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6}, {"num_hidden_layers", 2}, {"num_attention_heads", 2}, {"num_key_value_heads", 1}, {"head_dim", 2}, {"intermediate_size", 5}};
     const size_t start = f.bytes.size(); f.bytes.append(6, '\x38'); // E4M3 1.0
     f.header[name] = {{"dtype", "F8_E4M3"}, {"shape", {2, 3}}, {"data_offsets", {start, start+6}}};
     f.add(name + "_scale", {1}); // BF16 1.0
@@ -300,7 +326,7 @@ const std::string patch_input = "model.vision_tower.patch_embedder.input_proj.we
 const std::string patch_position = "model.vision_tower.patch_embedder.position_embedding_table";
 vllm::HfConfig patch_config() {
   auto c = config();
-  c.raw["vision_config"] = {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6},
+  c.raw["vision_config"] = {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6}, {"num_hidden_layers", 2}, {"num_attention_heads", 2}, {"num_key_value_heads", 1}, {"head_dim", 2}, {"intermediate_size", 5},
       {"patch_size", 1}, {"position_embedding_size", 2}};
   return c;
 }
@@ -363,7 +389,7 @@ TEST_CASE("E4B vision patches: owned raw layout and FP8 scaling survive shard de
       const auto& patch = w.vision_patch_weights;
       REQUIRE(patch.input_proj.size() == 9);
       REQUIRE(patch.position_embedding_table.size() == 12);
-      CHECK(patch.blocks.empty()); CHECK(patch.embed_projection.empty());
+      CHECK(patch.blocks.size() == 2); CHECK(patch.embed_projection.empty());
       for (size_t i = 0; i < patch.input_proj.size(); ++i)
         CHECK(patch.input_proj[i] == (fp8 ? 0x4000 : 0x3f00 + i));
       for (size_t i = 0; i < patch.position_embedding_table.size(); ++i)
@@ -379,6 +405,7 @@ TEST_CASE("E4B vision patches: absent modality and dimension overflow stay bound
     auto w = owned ? vllm::LoadGemma4ForConditionalGenerationWeightsOwned(
         std::make_shared<const std::vector<vllm::SafetensorsFile>>(std::move(shards)), c)
         : vllm::LoadGemma4ForConditionalGenerationWeights(shards, c);
+    CHECK(w.vision_patch_weights.blocks.empty());
     CHECK(w.vision_patch_weights.input_proj.empty());
     CHECK(w.vision_patch_weights.position_embedding_table.empty());
   }
@@ -407,4 +434,81 @@ TEST_CASE("E4B vision patches: absent modality and dimension overflow stay bound
   c.raw["vision_config"]["patch_size"] = original.raw["vision_config"]["patch_size"];
   c.raw["vision_config"]["position_embedding_size"] = original.raw["vision_config"]["position_embedding_size"];
   reject_mm(f, c, patch_input);
+}
+
+TEST_CASE("E4B vision blocks: complete per-layer raw layout survives shard destruction") {
+  for (bool owned : {false, true}) for (bool fp8 : {false, true}) {
+    vllm::Gemma4Weights w;
+    {
+      Fixture f; f.add(vision_proj, {2, 3});
+      for (int layer = 0; layer < 2; ++layer) {
+        for (size_t j = 0; j < inventory.size(); ++j) {
+          const auto& e = inventory[j]; const auto name = block_prefix(layer) + e.name;
+          size_t count = 1; for (auto d : e.shape) count *= size_t(d);
+          const auto start = f.bytes.size();
+          if (fp8 && e.shape.size() == 2) {
+            f.bytes.append(count, '\x38');
+            f.header[name]["dtype"] = "F8_E4M3";
+            f.header[name]["data_offsets"] = {start, start + count};
+            f.add(name + "_scale", {1});
+            f.bytes[f.bytes.size()-2] = 0; f.bytes.back() = '\x40';
+          } else {
+            for (size_t k = 0; k < count; ++k) {
+              uint16_t bits = uint16_t(0x3f00 + layer * 128 + j * 5 + k);
+              f.bytes.push_back(char(bits & 255)); f.bytes.push_back(char(bits >> 8));
+            }
+            f.header[name]["data_offsets"] = {start, start + 2*count};
+          }
+        }
+      }
+      auto shards = f.open();
+      w = owned ? vllm::LoadGemma4ForConditionalGenerationWeightsOwned(
+          std::make_shared<const std::vector<vllm::SafetensorsFile>>(std::move(shards)), patch_config())
+          : vllm::LoadGemma4ForConditionalGenerationWeights(shards, patch_config());
+    }
+    w.shards_keepalive.reset();
+    REQUIRE(w.vision_patch_weights.blocks.size() == 2);
+    for (size_t layer = 0; layer < 2; ++layer) for (size_t j = 0; j < inventory.size(); ++j) {
+      const auto& e = inventory[j]; const auto& values = w.vision_patch_weights.blocks[layer].*e.member;
+      size_t count = 1; for (auto d : e.shape) count *= size_t(d);
+      REQUIRE(values.size() == count);
+      for (size_t k = 0; k < count; ++k)
+        CHECK(values[k] == (fp8 && e.shape.size() == 2 ? 0x4000 : 0x3f00 + layer*128 + j*5 + k));
+    }
+  }
+}
+TEST_CASE("E4B vision blocks: every layer tensor requires exact shape and dtype") {
+  for (int layer = 0; layer < 2; ++layer) for (const auto& e : inventory) {
+    const auto name = block_prefix(layer) + e.name;
+    for (int defect = 0; defect < 3; ++defect) {
+      Fixture f; f.add(vision_proj, {2, 3});
+      if (defect == 0) f.header.erase(name);
+      if (defect == 1) f.add(name, {1});
+      if (defect == 2) f.header[name]["dtype"] = "F16";
+      reject_mm(f, patch_config(), defect == 2 ? "BF16" : name);
+    }
+  }
+}
+TEST_CASE("E4B vision blocks: invalid dimensions and overflow fail before allocation") {
+  for (const auto* key : {"num_hidden_layers", "num_attention_heads", "num_key_value_heads", "head_dim", "intermediate_size"}) {
+    for (const json& bad : std::vector<json>{nullptr, false, 0, -1, 1.5, "bad", UINT64_MAX}) {
+      Fixture f; f.add(vision_proj, {2, 3}); auto c = patch_config();
+      c.raw["vision_config"][key] = bad; reject_mm(f, c, key);
+    }
+    Fixture f; f.add(vision_proj, {2, 3}); auto c = patch_config();
+    c.raw["vision_config"].erase(key); reject_mm(f, c, key);
+  }
+  for (const auto* key : {"num_hidden_layers", "num_attention_heads", "head_dim", "intermediate_size"}) {
+    Fixture f; f.add(vision_proj, {2, 3}); auto c = patch_config();
+    c.raw["vision_config"][key] = INT64_MAX; reject_mm(f, c, "overflow");
+  }
+  // Head products fit int64, but matrix bytes overflow with hidden_size=3.
+  {
+    Fixture f; f.add(vision_proj, {2, 3}); auto c = patch_config();
+    c.raw["vision_config"]["num_attention_heads"] = INT64_MAX / 4;
+    reject_mm(f, c, "block tensor size overflow");
+  }
+  Fixture f; f.add(vision_proj, {2, 3}); auto c = patch_config();
+  c.raw["vision_config"]["num_key_value_heads"] = 3;
+  reject_mm(f, c, "head divisibility");
 }

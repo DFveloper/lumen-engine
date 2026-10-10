@@ -421,6 +421,67 @@ multimodal::Gemma4VisionWeights LoadVisionPatches(
   return w;
 }
 
+// Transformers a08ace4b modeling_gemma4.py:168-215,927-1002,1036-1038.
+// Retain learned block inventory only: clipping and encoder execution are owed.
+void LoadVisionBlocks(const TensorResolver& get, const nlohmann::json& cfg,
+                      multimodal::Gemma4VisionWeights& w) {
+  if (cfg.is_null()) return;
+  const auto positive = [&](const char* key) {
+    const auto it = cfg.find(key);
+    VT_CHECK(it != cfg.end() && it->is_number_integer() && *it > 0 && *it <= INT64_MAX,
+             std::string("gemma4: vision_config ") + key + " must be a positive integer");
+    return it->get<int64_t>();
+  };
+  const int64_t h = positive("hidden_size");
+  const int64_t depth = positive("num_hidden_layers");
+  const int64_t heads = positive("num_attention_heads");
+  const int64_t kv_heads = positive("num_key_value_heads");
+  const int64_t hd = positive("head_dim");
+  const int64_t intermediate = positive("intermediate_size");
+  VT_CHECK(heads <= INT64_MAX / hd && kv_heads <= INT64_MAX / hd,
+           "gemma4: vision_config head dimension overflow");
+  VT_CHECK(heads % kv_heads == 0, "gemma4: vision_config head divisibility");
+  const int64_t q = heads * hd, kv = kv_heads * hd;
+  using Block = multimodal::Gemma4VisionBlockWeights;
+  VT_CHECK(static_cast<uint64_t>(depth) <= SIZE_MAX / sizeof(Block),
+           "gemma4: vision_config num_hidden_layers overflow");
+  const auto matrix_size = [](int64_t rows, int64_t cols) {
+    VT_CHECK(rows <= INT64_MAX / 2 / cols &&
+                 static_cast<uint64_t>(rows) <= SIZE_MAX / 2 / static_cast<uint64_t>(cols),
+             "gemma4: vision_config block tensor size overflow");
+  };
+  matrix_size(q, h); matrix_size(kv, h); matrix_size(intermediate, h);
+  VT_CHECK(hd <= INT64_MAX / 2, "gemma4: vision_config norm size overflow");
+  // Validate each tensor before materialization. Do not reserve an untrusted
+  // layer count: a missing first layer must fail without a huge allocation.
+  for (int64_t layer = 0; layer < depth; ++layer) {
+    const auto prefix = "model.vision_tower.encoder.layers." + std::to_string(layer) + ".";
+    const auto load = [&](const char* suffix, std::vector<int64_t> shape) {
+      const auto name = prefix + suffix;
+      VT_CHECK(get(name).shape == shape, "gemma4: " + name + " incorrect shape");
+      auto tensor = LoadBf16Direct(get, name);
+      std::vector<uint16_t> values(tensor.bytes.size() / sizeof(uint16_t));
+      std::memcpy(values.data(), tensor.bytes.data(), tensor.bytes.size());
+      return values;
+    };
+    Block b;
+    b.q_proj = load("self_attn.q_proj.linear.weight", {q, h});
+    b.k_proj = load("self_attn.k_proj.linear.weight", {kv, h});
+    b.v_proj = load("self_attn.v_proj.linear.weight", {kv, h});
+    b.o_proj = load("self_attn.o_proj.linear.weight", {h, q});
+    b.gate_proj = load("mlp.gate_proj.linear.weight", {intermediate, h});
+    b.up_proj = load("mlp.up_proj.linear.weight", {intermediate, h});
+    b.down_proj = load("mlp.down_proj.linear.weight", {h, intermediate});
+    b.input_ln = load("input_layernorm.weight", {h});
+    b.post_attn_ln = load("post_attention_layernorm.weight", {h});
+    b.pre_ff_ln = load("pre_feedforward_layernorm.weight", {h});
+    b.post_ff_ln = load("post_feedforward_layernorm.weight", {h});
+    b.q_norm = load("self_attn.q_norm.weight", {hd});
+    b.k_norm = load("self_attn.k_norm.weight", {hd});
+    w.blocks.push_back(std::move(b));
+  }
+}
+
 Gemma4Weights LoadImpl(const std::vector<SafetensorsFile>& shards,
                        const HfConfig& config,
                        std::shared_ptr<const void> shards_owner) {
@@ -488,6 +549,7 @@ Gemma4Weights LoadImpl(const std::vector<SafetensorsFile>& shards,
   w.vision = LoadModalityProjector(get, config, "vision_config", "model.embed_vision", false);
   w.audio = LoadModalityProjector(get, config, "audio_config", "model.embed_audio", true);
   w.vision_patch_weights = LoadVisionPatches(get, w.vision.config);
+  LoadVisionBlocks(get, w.vision.config, w.vision_patch_weights);
 
   // Keep shards alive for borrowed experts
   w.shards_keepalive = shards_owner;

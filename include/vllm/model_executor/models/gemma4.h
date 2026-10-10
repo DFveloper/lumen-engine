@@ -120,7 +120,7 @@ struct Gemma4ModalityWeights {
 };
 
 struct Gemma4Weights {
-  // Partial inventory only: patch tensors; blocks/clipping are not loaded yet.
+  // Partial inventory: patch tensors and blocks; clipping/execution remain owed.
   multimodal::Gemma4VisionWeights vision_patch_weights;
   Gemma4ModalityWeights vision;
   Gemma4ModalityWeights audio;

@@ -356,3 +356,28 @@ layout and each layer, survive shard destruction, and reject missing,
 malformed, unsupported-dtype and overflow inputs through both overloads.
 No original weights or large allocations are needed. Preserve patch/projector
 behavior and absent vision. Full preflight remains pending and prohibited.
+
+### Block retention verification
+
+Both real decoder loader overloads now retain all 13 learned tensors per layer
+in `vision_patch_weights.blocks`, using original `.linear.weight` names.
+Validated local integer dimensions determine shapes, including asymmetric
+query/KV widths; the full JSON config remains owned. This does not make the
+existing MHA-only forward execute GQA, or supply clipping scalars. Full typed
+execution config and encoder/hook wiring remain pending.
+
+The initial red run failed 97 assertions; a malformed fixture initially failed
+in the safetensors reader rather than the loader. After correcting its payload,
+the complete suite against the original loader failed 251 assertions (23 cases,
+19 passing). Restored implementation passes 23 cases / 1492 assertions, no
+skips, through the exact-count CTest gate. The two-layer fixture distinguishes
+every matrix and norm, raw layout, BF16 and nonunit scaled FP8 matrices,
+shard-independent lifetime, missing inventory, dtype, config and byte overflow.
+Nine direct header consumers pass syntax-only compilation with actual
+compile_commands flags. All 28 metadata tests and offline CLI pass; runtime
+acceptance remains false. Record and symbol-anchor checks pass.
+
+Evidence: `assets/work/2026-10-10-e4b-vision-blocks`. Only the existing minimal
+CPU target was built with two jobs. Full preflight remains prohibited/pending;
+no GPU, original weights, install, remote operation or inference ran. The
+implementation awaits independent review and the parent rerun. T02 is PARTIAL.

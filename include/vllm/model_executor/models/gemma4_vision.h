@@ -81,7 +81,7 @@ struct Clip {
 // `qwen3_vl_vision.h` for the mirror argument and the bit-identity proof).
 struct Gemma4VisionBlockWeights {
   std::vector<uint16_t> input_ln, post_attn_ln, pre_ff_ln, post_ff_ln;  // [H]
-  std::vector<uint16_t> q_proj, k_proj, v_proj, o_proj;  // [H,H]  (nh*head_dim==H)
+  std::vector<uint16_t> q_proj, k_proj, v_proj, o_proj;  // Q [nh*hd,H], K/V [nkv*hd,H], O [H,nh*hd]
   std::vector<uint16_t> q_norm, k_norm;                  // [head_dim]
   std::vector<uint16_t> gate_proj, up_proj;              // [I,H]
   std::vector<uint16_t> down_proj;                       // [H,I]

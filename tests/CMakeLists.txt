@@ -4779,5 +4779,5 @@ target_compile_definitions(test_gemma4_e4b_loader PRIVATE
   E4B_CONFIG_PATH="${CMAKE_SOURCE_DIR}/tests/fixtures/gemma4_e4b_google/config.json")
 # Do not accept an empty executable or skipped cases as this synthetic gate.
 set_tests_properties(test_gemma4_e4b_loader PROPERTIES
-  PASS_REGULAR_EXPRESSION "test cases: +20 [|] +20 passed [|] +0 failed [|] +0 skipped"
+  PASS_REGULAR_EXPRESSION "test cases: +23 [|] +23 passed [|] +0 failed [|] +0 skipped"
   FAIL_REGULAR_EXPRESSION "Status: FAILURE")
