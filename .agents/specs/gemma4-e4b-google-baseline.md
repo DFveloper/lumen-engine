@@ -101,7 +101,7 @@ Required coverage includes original config and tensor accounting, canonical chat
 
 ## Work breakdown
 
-T00 creates the OPEN issue and commits this design. T01 pins metadata, validates evidence, enumerates upstream tests, and freezes justified numeric bars. T02 accounts for config and weights. T03 preserves chat and tools. T04, T05, and T06 implement image, audio, and video processing. T07 and T08 wire the vision and audio encoders. T09 wires hooks and the existing runner. T10 exposes raw inputs through the public ABI and serving. T11 creates the strict acceptance harness. T12 measures original-checkpoint reference equivalence. T13 proves production reachability and completes independent review. Each task depends on the previous task. T00 authorizes none of the product edits.
+T00 creates the OPEN issue and commits this design. T01 pins metadata, validates evidence, enumerates upstream tests, and freezes justified numeric bars. T02 accounts for config and weights. T03 preserves chat and tools. T04, T05, and T06 implement image, audio, and video processing. T07 and T08 wire the vision and audio encoders. T09 wires hooks and the existing runner. T10 exposes raw inputs through the public ABI and serving. T11 creates the strict acceptance harness. T12 measures original-checkpoint reference equivalence. T13 proves production reachability and completes independent review. Tasks remain serial except for the root-approved T01 prerequisite split below. T00 authorizes none of the product edits.
 
 ## T01 metadata contract and remaining prerequisites
 
@@ -161,10 +161,23 @@ runtime acceptance, obtain an authorized pinned environment, verify imports and
 original checkpoint loading, and measure independent oracle repeatability for
 each required stage and dtype. Ratify explicit absolute and relative bounds
 before comparison capture. Keep exact integer identity and zero token divergence.
-T01 cannot be marked done until these prerequisites are resolved and reviewed.
+T01B cannot be marked done until these prerequisites are resolved and reviewed.
 
 The first focused test run failed because the new validator did not exist.
 After implementation, 18 CPU tests passed without skips. They use original
 metadata and synthetic reports only. No C++ runtime, GPU, weights, or upstream
 runtime tests were executed. Full preflight remains PENDING under the existing
 T00 environmental blockers and the prohibition on another full-suite attempt.
+
+## Root-approved T01 dependency split
+
+Root accepted T01A metadata tooling at `e1759f0c0637a5be4df0735be17b2668c170d2cf`.
+Root supplied passing verification `bg19728tests` and independent review
+`reviewer9fce`, with all findings fixed. T01A is DONE for metadata tooling only.
+
+T01B retains the PENDING measured oracle compatibility and justified frozen
+numerical bars. T02 synthetic CPU loader/config work depends on T01A only.
+T01B is a HARD dependency for every numeric/runtime acceptance, including T12
+and T13. Synthetic fixtures never establish original-Google inference.
+This scheduling clarification changes no runtime barrier or acceptance criterion.
+Full preflight remains PENDING under the recorded failures. No rerun is authorized.
