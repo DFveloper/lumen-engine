@@ -381,3 +381,52 @@ Evidence: `assets/work/2026-10-10-e4b-vision-blocks`. Only the existing minimal
 CPU target was built with two jobs. Full preflight remains prohibited/pending;
 no GPU, original weights, install, remote operation or inference ran. The
 implementation awaits independent review and the parent rerun. T02 is PARTIAL.
+
+## T02 clipping and typed vision configuration
+
+Prior block slice at 54e1150c1cebf1ac4aaecb60b9f085965b5f1576 is reviewed:
+parent reports rootbg422 and review0d43 PASS, 23 cases/1492 assertions and
+28 metadata tests. T02 remains PARTIAL.
+
+Pinned Transformers a08ace4bbd97e721c98751deec37d87b026acadc
+`modeling_gemma4.py::Gemma4ClippableLinear` (168-194) registers scalar
+input_min, input_max, output_min, output_max on each of seven block linears
+when use_clipped_linears is true; defaults are negative/positive infinity.
+`configuration_gemma4.py::Gemma4VisionConfig` supplies false as the clipping
+default, pooling 3, RMS epsilon 1e-6, default RoPE theta 100, tanh GELU,
+no attention bias and no standardization. Google explicitly enables clipping.
+Pinned vLLM a7c23ac96d7806e7c7e7d862eadbce5a33529b94
+`gemma4_mm.py::Gemma4ForConditionalGeneration` constructs the Transformers
+vision tower, replaces inner linears and maps the model.vision_tower prefix.
+
+Header-only HTTP ranges from Google's immutable model.safetensors confirm
+448 bounds (16 layers x 7 linears x 4), all BF16 scalar shape []. Names are
+model.vision_tower.encoder.layers.{i}.self_attn.{q,k,v,o}_proj.{bound} and
+model.vision_tower.encoder.layers.{i}.mlp.{gate,up,down}_proj.{bound}.
+No bounds belong to patch/projector plain linears. The 281040-byte header's
+SHA256 is 3d3bfac0fbdf7bd65981df4033efb7690240a8fe6f92eb2f3e3846b289a6f994;
+metadata evidence resides in assets/work/2026-10-10-e4b-vision-clipping.
+No tensor payload was fetched. This is inventory, not numerical acceptance.
+
+Both real loaders shall require all bounds when clipping is enabled and
+retain each as a float scalar for existing Clip consumers. BF16 widening is
+exact and costs four bytes per bound, not matrix widening. Disabled clipping
+requires no bounds and uses true infinite no-op defaults. Reject wrong shape,
+wrong dtype, NaN or reversed bound pairs; permit infinities, including upstream
+initialization defaults, and equal endpoints. The NaN/order checks are local
+fail-closed policy against undefined/unintended clamp behavior.
+
+Retain optional typed vision configuration alongside weights: all existing
+forward dimensions, text width, epsilon, pooling, theta, clipping flag and
+standardization/activation/bias/dropout semantics. Validate typed scalar inputs,
+float epsilon conversion and pooling-square overflow. Reject unsupported
+activation, bias, standardization and RoPE type rather than silently ignoring
+them. Preserve GQA dimensions for inventory without claiming the MHA forward
+executes them. No new encoder hook or execution support is in this slice.
+
+Real-path tiny fixtures shall prove both overloads, layer-specific bounds,
+shard-independent lifetime, defaults, shape/dtype/NaN/order/config/overflow
+refusal and preserved BF16/scaled-FP8 matrix layout. Red precedes product
+changes. Run only the minimal CPU target, actual-flags header syntax checks,
+28 metadata regressions and focused record/style/trailer checks. Full preflight
+and audio, hooks, original-checkpoint numeric/runtime gates remain pending.
