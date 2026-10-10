@@ -47,6 +47,7 @@
 #pragma once
 
 #include "vllm/model_executor/models/gemma4_vision.h"
+#include "vllm/model_executor/models/gemma4_audio.h"
 #include <optional>
 #include <cstdint>
 #include <memory>
@@ -120,7 +121,15 @@ struct Gemma4ModalityWeights {
   OwnedTensor embedding_projection;
 };
 
+// Only frontend fields are validated here; not an executable full tower config.
+struct Gemma4AudioFrontendConfig {
+  int64_t hidden_size, sub_ch0, sub_ch1, input_width;
+  float rms_norm_eps;
+};
+
 struct Gemma4Weights {
+  multimodal::Gemma4AudioWeights audio_frontend_weights;
+  std::optional<Gemma4AudioFrontendConfig> audio_frontend_config;
   // Partial inventory: patch tensors and blocks; clipping/execution remain owed.
   multimodal::Gemma4VisionWeights vision_patch_weights;
   // Inventory configuration, not a claim of GQA execution by the MHA forward.

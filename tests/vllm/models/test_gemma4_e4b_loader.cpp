@@ -215,6 +215,29 @@ vllm::HfConfig mm_config() {
                            {"rms_norm_eps", 1e-6}, {"num_hidden_layers", 2}, {"num_attention_heads", 2}, {"num_key_value_heads", 1}, {"head_dim", 2}, {"intermediate_size", 5}};
   return c;
 }
+using Audio = vllm::multimodal::Gemma4AudioWeights;
+struct AudioEntry {
+  const char* name;
+  std::vector<int64_t> shape;
+  std::vector<float> Audio::*member;
+};
+std::vector<AudioEntry> audio_inventory(int64_t h = 4, int64_t a = 4, int64_t b = 2) {
+  return {{"layer0.conv.weight", {a,1,3,3}, &Audio::sub0_conv},
+          {"layer0.norm.weight", {a}, &Audio::sub0_norm},
+          {"layer1.conv.weight", {b,a,3,3}, &Audio::sub1_conv},
+          {"layer1.norm.weight", {b}, &Audio::sub1_norm},
+          {"input_proj_linear.weight", {h,(a/4)*b}, &Audio::input_proj}};
+}
+const std::string audio_prefix = "model.audio_tower.subsample_conv_projection.";
+void add_audio(Fixture& f, int64_t h, int64_t a = 128, int64_t b = 32) {
+  for (const auto& e : audio_inventory(h,a,b)) f.add(audio_prefix + e.name, e.shape);
+}
+vllm::HfConfig audio_config() {
+  auto c = config();
+  c.raw["audio_config"] = {{"hidden_size",4},{"output_proj_dims",5},
+      {"rms_norm_eps",0.0001},{"subsampling_conv_channels",{4,2}}};
+  return c;
+}
 void reject_mm(Fixture& f, const vllm::HfConfig& c, const std::string& diagnostic) {
   auto shards = f.open();
   CHECK_THROWS_WITH(vllm::LoadGemma4ForConditionalGenerationWeights(shards, c),
@@ -268,7 +291,7 @@ TEST_CASE("E4B projectors: owned raw BF16 layout and full config survive shard d
     vllm::Gemma4Weights w;
     auto c = mm_config();
     {
-      Fixture f; f.add(vision_proj, {2, 3}); f.add(audio_proj, {2, 5});
+      Fixture f; f.add(vision_proj, {2, 3}); f.add(audio_proj, {2, 5}); add_audio(f,4);
       const size_t start = f.header[vision_proj]["data_offsets"][0].get<size_t>();
       for (size_t i = 0; i < 6; ++i) {
         f.bytes[start + 2*i] = 0; f.bytes[start + 2*i + 1] = char(0x3f + i);
@@ -299,7 +322,7 @@ TEST_CASE("E4B projectors: null modalities and audio output width fallback") {
   for (const json& output : std::vector<json>{nullptr, 0, 3}) {
     Fixture a; a.add(audio_proj, {2, 3}); auto ac = config();
     ac.raw["audio_config"] = {{"hidden_size", 3}, {"patch_size", 1}, {"position_embedding_size", 2}, {"rms_norm_eps", 1e-6}, {"num_hidden_layers", 2}, {"num_attention_heads", 2}, {"num_key_value_heads", 1}, {"head_dim", 2}, {"intermediate_size", 5}, {"output_proj_dims", output}};
-    auto as = a.open(); auto aw = vllm::LoadGemma4ForConditionalGenerationWeights(as, ac);
+    add_audio(a,3); auto as = a.open(); auto aw = vllm::LoadGemma4ForConditionalGenerationWeights(as, ac);
     CHECK(aw.audio.embedding_projection.shape[1] == 3);
     ac.raw["audio_config"].erase("output_proj_dims");
     CHECK(vllm::LoadGemma4ForConditionalGenerationWeights(as, ac).audio.embedding_projection.bytes.size() == 12);
@@ -321,6 +344,7 @@ TEST_CASE("E4B projectors: scaled FP8 materialization remains supported") {
     const size_t start = f.bytes.size(); f.bytes.append(6, '\x38'); // E4M3 1.0
     f.header[name] = {{"dtype", "F8_E4M3"}, {"shape", {2, 3}}, {"data_offsets", {start, start+6}}};
     f.add(name + "_scale", {1}); // BF16 1.0
+    if (name == audio_proj) add_audio(f,3);
     auto shards = f.open();
     auto w = vllm::LoadGemma4ForConditionalGenerationWeights(shards, c);
     const auto& p = name == vision_proj ? w.vision.embedding_projection : w.audio.embedding_projection;
@@ -676,5 +700,96 @@ TEST_CASE("E4B typed vision config: malformed types and nonfinite numbers fail c
     Fixture f; f.add(vision_proj, {2,3}); auto c = patch_config();
     c.raw["vision_config"]["rope_parameters"] = value;
     reject_mm(f, c, "rope_parameters");
+  }
+}
+
+TEST_CASE("E4B audio frontend: owned contents layout and configuration") {
+  for (bool owned : {false,true}) {
+    vllm::Gemma4Weights w;
+    {
+      Fixture f; add_audio(f,4,4,2); f.add(audio_proj,{2,5});
+      int tensor = 0;
+      for (const auto& e : audio_inventory()) {
+        const auto start = f.header[audio_prefix+e.name]["data_offsets"][0].get<size_t>();
+        size_t n=1; for (auto d:e.shape) n*=d;
+        for (size_t i=0;i<n;++i) {
+          uint16_t bits = static_cast<uint16_t>(0x3f00 + 128*tensor + i);
+          std::memcpy(f.bytes.data()+start+2*i,&bits,2);
+        }
+        ++tensor;
+      }
+      auto shards=f.open(); auto c=audio_config();
+      w=owned ? vllm::LoadGemma4ForConditionalGenerationWeightsOwned(
+          std::make_shared<const std::vector<vllm::SafetensorsFile>>(std::move(shards)),c)
+          : vllm::LoadGemma4ForConditionalGenerationWeights(shards,c);
+    }
+    w.shards_keepalive.reset();
+    REQUIRE(w.audio_frontend_config.has_value());
+    const auto& c=*w.audio_frontend_config;
+    CHECK(c.hidden_size==4); CHECK(c.sub_ch0==4); CHECK(c.sub_ch1==2);
+    CHECK(c.input_width==2); CHECK(c.rms_norm_eps==doctest::Approx(0.0001));
+    int tensor=0;
+    for (const auto& e:audio_inventory()) {
+      size_t n=1; for(auto d:e.shape)n*=d;
+      const auto& values=w.audio_frontend_weights.*(e.member); REQUIRE(values.size()==n);
+      for(size_t i=0;i<n;++i) {
+        uint32_t bits=uint32_t(0x3f00+128*tensor+i)<<16; float expected;
+        std::memcpy(&expected,&bits,4); CHECK(values[i]==expected);
+      }
+      ++tensor;
+    }
+    CHECK(w.audio_frontend_weights.layers.empty());
+    CHECK(w.audio_frontend_weights.output_proj_w.empty());
+  }
+}
+TEST_CASE("E4B audio frontend: missing malformed and wrong dtype inventory") {
+  for(const auto& e:audio_inventory()) for(int bad=0;bad<3;++bad) {
+    Fixture f; add_audio(f,4,4,2); f.add(audio_proj,{2,5});
+    const auto name=audio_prefix+e.name;
+    if(bad==0) f.header.erase(name);
+    if(bad==1) { auto shape=e.shape; shape.push_back(1); f.header[name]["shape"]=shape; }
+    if(bad==2) f.header[name]["dtype"]="F16";
+    reject_mm(f,audio_config(),bad==2 ? "BF16" : name);
+  }
+}
+TEST_CASE("E4B audio frontend: config and precise overflow refusals") {
+  for (const auto* key : {"hidden_size", "rms_norm_eps"}) {
+    Fixture f; f.add(audio_proj,{2,5}); auto c=audio_config();
+    c.raw["audio_config"].erase(key); reject_mm(f,c,key);
+  }
+  {
+    Fixture f; f.add(audio_proj,{2,5}); auto c=audio_config();
+    c.raw["audio_config"]["hidden_size"]=INT64_MAX;
+    reject_mm(f,c,"audio_config frontend tensor size overflow");
+  }
+  for(const json& bad:std::vector<json>{nullptr,false,4,"bad",json::array(),{4},{4,2,1},{0,2},{3,2},{4,-1},{4,2.5},{4,true}}) {
+    Fixture f; f.add(audio_proj,{2,5}); auto c=audio_config();
+    c.raw["audio_config"]["subsampling_conv_channels"]=bad;
+    reject_mm(f,c,"subsampling_conv_channels");
+  }
+  for(double eps:{1e-300,1e300}) {
+    Fixture f; f.add(audio_proj,{2,5}); auto c=audio_config();
+    c.raw["audio_config"]["rms_norm_eps"]=eps;
+    reject_mm(f,c,"audio_config rms_norm_eps");
+  }
+  for(const json& channels:std::vector<json>{{INT64_MAX,2},{4,INT64_MAX},{int64_t(1)<<32,int64_t(1)<<32}}) {
+    Fixture f; f.add(audio_proj,{2,5}); auto c=audio_config();
+    c.raw["audio_config"]["subsampling_conv_channels"]=channels;
+    reject_mm(f,c,"audio_config frontend tensor size overflow");
+  }
+}
+TEST_CASE("E4B audio frontend: absent and source default channels") {
+  for(bool owned:{false,true}) for(bool absent:{false,true}) {
+    Fixture f; auto c=config();
+    if(!absent) {c=audio_config(); c.raw["audio_config"].erase("subsampling_conv_channels");
+      add_audio(f,4); f.add(audio_proj,{2,5});}
+    auto shards=f.open();
+    auto w=owned ? vllm::LoadGemma4ForConditionalGenerationWeightsOwned(
+        std::make_shared<const std::vector<vllm::SafetensorsFile>>(std::move(shards)),c)
+        : vllm::LoadGemma4ForConditionalGenerationWeights(shards,c);
+    CHECK(w.audio_frontend_config.has_value()==!absent);
+    if(!absent) { REQUIRE(w.audio_frontend_config); CHECK(w.audio_frontend_config->sub_ch0==128);
+      CHECK(w.audio_frontend_config->sub_ch1==32); CHECK(w.audio_frontend_config->input_width==1024); }
+    else CHECK(w.audio_frontend_weights.sub0_conv.empty());
   }
 }

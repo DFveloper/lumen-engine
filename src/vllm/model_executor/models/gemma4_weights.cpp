@@ -379,6 +379,65 @@ Gemma4ModalityWeights LoadModalityProjector(
   return w;
 }
 
+// Transformers a08ace4b Gemma4AudioSubSampleConvProjection. Host-F32
+// reference inventory only: no Conformer execution or encoder-hook claim.
+void LoadAudioFrontend(const TensorResolver& get, Gemma4Weights& w) {
+  const auto& cfg = w.audio.config;
+  if (cfg.is_null()) return;
+  Gemma4AudioFrontendConfig c{};
+  c.hidden_size = cfg.at("hidden_size").get<int64_t>(); // projector validated
+  const auto channels = cfg.value("subsampling_conv_channels", nlohmann::json{128, 32});
+  VT_CHECK(channels.is_array() && channels.size() == 2,
+           "gemma4: audio_config subsampling_conv_channels must contain two integers");
+  for (const auto& v : channels)
+    VT_CHECK(v.is_number_integer() && v > 0 && v <= INT64_MAX,
+             "gemma4: audio_config subsampling_conv_channels must be positive integers");
+  c.sub_ch0 = channels[0].get<int64_t>();
+  c.sub_ch1 = channels[1].get<int64_t>();
+  VT_CHECK(c.sub_ch0 >= 4,
+           "gemma4: audio_config subsampling_conv_channels produces zero input width");
+  const double eps = cfg.at("rms_norm_eps").get<double>();
+  c.rms_norm_eps = static_cast<float>(eps);
+  VT_CHECK(std::isfinite(c.rms_norm_eps) && c.rms_norm_eps > 0,
+           "gemma4: audio_config rms_norm_eps must be representable as positive finite F32");
+  // Check every F32 destination size before any lookup, multiplication or allocation.
+  const auto count = [](std::initializer_list<int64_t> dims) {
+    int64_t n = 1;
+    for (auto d : dims) {
+      VT_CHECK(d > 0 && n <= INT64_MAX / 4 / d &&
+                   static_cast<uint64_t>(n) <= SIZE_MAX / sizeof(float) / static_cast<uint64_t>(d),
+               "gemma4: audio_config frontend tensor size overflow");
+      n *= d;
+    }
+    return n;
+  };
+  count({c.sub_ch0, 1, 3, 3});
+  count({c.sub_ch1, c.sub_ch0, 3, 3});
+  c.input_width = count({c.sub_ch0 / 4, c.sub_ch1});
+  count({c.hidden_size, c.input_width});
+  const auto load = [&](const char* suffix, const std::vector<int64_t>& shape) {
+    const std::string name = std::string("model.audio_tower.subsample_conv_projection.") + suffix;
+    const auto& t = get(name);
+    VT_CHECK(t.shape == shape, "gemma4: " + name + " incorrect shape");
+    VT_CHECK(t.dtype == "BF16", "gemma4: " + name + " requires BF16");
+    auto owned = LoadBf16Direct(get, name);
+    std::vector<float> values(owned.bytes.size() / sizeof(uint16_t));
+    for (size_t i = 0; i < values.size(); ++i) {
+      uint16_t bits;
+      std::memcpy(&bits, owned.bytes.data() + i * sizeof(bits), sizeof(bits));
+      values[i] = vt::BF16ToF32(bits);
+    }
+    return values;
+  };
+  auto& a = w.audio_frontend_weights;
+  a.sub0_conv = load("layer0.conv.weight", {c.sub_ch0, 1, 3, 3});
+  a.sub0_norm = load("layer0.norm.weight", {c.sub_ch0});
+  a.sub1_conv = load("layer1.conv.weight", {c.sub_ch1, c.sub_ch0, 3, 3});
+  a.sub1_norm = load("layer1.norm.weight", {c.sub_ch1});
+  a.input_proj = load("input_proj_linear.weight", {c.hidden_size, c.input_width});
+  w.audio_frontend_config = c;
+}
+
 // Pinned Transformers a08ace4b modeling_gemma4.py:579-588.
 // This retains patch inventory; encoder/hook wiring remains owed.
 multimodal::Gemma4VisionWeights LoadVisionPatches(
@@ -637,6 +696,7 @@ Gemma4Weights LoadImpl(const std::vector<SafetensorsFile>& shards,
 
   w.vision = LoadModalityProjector(get, config, "vision_config", "model.embed_vision", false);
   w.audio = LoadModalityProjector(get, config, "audio_config", "model.embed_audio", true);
+  LoadAudioFrontend(get, w);
   w.vision_patch_weights = LoadVisionPatches(get, w.vision.config);
   LoadVisionBlocks(get, w.vision.config, w.vision_patch_weights);
   if (!w.vision.config.is_null()) {

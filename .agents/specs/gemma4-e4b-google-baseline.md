@@ -508,3 +508,28 @@ layers (62 each, including clipping). The existing embed_audio connector is
 already retained separately. Relative positional encoding has no persistent
 header tensor. Typed block/output config, block and output weights, encoder
 hooks, production dtype execution and all numeric/runtime gates remain owed.
+
+### Audio frontend verification
+
+Both decoder overloads now reach LoadAudioFrontend through their shared loader.
+The five source-named BF16 tensors are widened exactly into owned host-F32
+vectors in audio_frontend_weights. Typed audio_frontend_config records only
+validated frontend fields; full JSON remains in audio.config. No frontend
+clipping was invented. Existing connector fallback and scaled-FP8 behavior,
+text and vision tests remain passing after adding required frontend fixtures.
+
+Red before loader implementation: 33 cases, 29 passing, 67 failed assertions.
+Final CPU green: 33 cases / 3002 assertions, zero skips; exact-count CTest PASS.
+Tests exercise both entrypoints, distinct tensor/element contents, row-major
+layout, lifetime after fixture destruction and keepalive reset, missing/rank/
+dtype errors, channel types/defaults, missing config fields, epsilon narrowing,
+and exact frontend tensor-size overflow diagnostics before tensor lookup.
+Nine affected consumers pass syntax checks with actual compile_commands flags;
+28 metadata tests and offline CLI pass. Record and symbol-anchor checks pass.
+Evidence: assets/work/2026-10-10-e4b-audio-loader. Only the reused eight-TU CPU
+target was built with -j2; incremental scratch stays below 256 MiB.
+
+T02 remains PARTIAL, awaiting root verification and fresh independent review.
+The remaining 746 audio_tower tensors, typed block/output config, encoder hooks,
+production BF16 execution and numerical/runtime gates are not supplied here.
+Full preflight remains pending and was not run, as authorized for this slice.
