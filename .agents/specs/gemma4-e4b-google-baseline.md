@@ -267,3 +267,34 @@ independent immutable-head review and root verification. T02 remains PARTIAL:
 tower inventory, clipping, full modality validation and encoder/hook wiring
 are owed. No full preflight, GPU, weights download or original-model inference
 ran. Assistant/tools/image/audio/video acceptance is unchanged.
+
+## T02 vision patch-embedder retention slice
+
+Inspection found no production vision weight loader: `Gemma4VisionWeights`
+exists only in forward code and synthetic/reference tests. Bound this slice to
+its two patch-embedder tensors; encoder blocks, typed full tower configuration,
+clipping scalars and audio tower remain pending. An empty blocks vector is not
+an executable tower and must not be interpreted as encoder readiness.
+
+Pinned Transformers `modeling_gemma4.py` at
+`a08ace4bbd97e721c98751deec37d87b026acadc`, lines 579–588, defines
+`patch_embedder.input_proj.weight` [hidden, 3*patch_size^2] and
+`patch_embedder.position_embedding_table` [2, position_embedding_size, hidden].
+The vLLM prefix mapper cited above maps `model.vision_tower` unchanged apart
+from the model prefix. Retain these in the existing vision representation,
+with raw BF16 input projection and the representation's documented F32 position
+lookup exception (exact widening of materialized BF16, not a new F32 policy).
+Require positive integer patch_size and position_embedding_size in present
+vision configs, checked multiplication, exact tensor shapes, and the unchanged
+dense BF16/scaled-FP8 materializer. Absent/null vision stays optional. The full
+JSON config remains retained by the projector slice; no invented defaults.
+
+Tiny original-structure tests exercise both actual decoder loader overloads,
+missing tensors, malformed shapes/dtypes/config, ownership and raw layout.
+Preserve text/projector regressions, update the exact CPU case count, compile
+affected shared-header consumers, and run the 28 metadata tests. Full preflight
+remains pending and prohibited by the current task. No inference claim follows.
+
+The parent reports projector rootbg296 PASS (16 cases / 192 assertions and 28
+metadata tests) and independent reviewer7892d92a PASS (13 mutations, copy-mode
+and header checks). That slice is reviewed; T02 remains PARTIAL.
