@@ -459,3 +459,52 @@ Full preflight is pending, not green. T02 is PARTIAL: audio inventory and
 encoder/hook wiring remain owed. Original-checkpoint inference, numerical
 acceptance, GQA execution and runtime prerequisites are not established.
 Root verification and independent review of this slice remain pending.
+
+## T02 audio frontend inventory refinement
+
+Vision clipping at 8c94b97e4e54a357304232cee8c3597209c6f6fb is reviewed:
+parent reports rootbg452 and review5ec77653 PASS (29 cases/2648 assertions,
+28 metadata tests). T02 remains PARTIAL.
+
+This bounded slice retains the complete subsampling frontend, not the Conformer
+blocks or output projection. Pinned Transformers a08ace4bbd97e721c98751deec37d87b026acadc
+`modeling_gemma4.py::Gemma4AudioSubSampleConvProjection` and
+`Gemma4AudioSubSampleConvProjectionLayer` define two biasless 3x3 Conv2d weights,
+two biasless LayerNorm weights (plain scale, not 1+w), and a biasless input
+linear. `configuration_gemma4.py::Gemma4AudioConfig` defaults channels to
+[128,32], epsilon to 1e-6. The input linear width is explicitly
+(channels[0] // 4) * channels[1]; do not guess a feature_size config field.
+Pinned vLLM a7c23ac96d `gemma4_mm.py::Gemma4ForConditionalGeneration` maps
+model.audio_tower to audio_tower and constructs this Transformers tower.
+
+The already-downloaded Google header (SHA256 above) confirms all five weights
+are BF16: model.audio_tower.subsample_conv_projection.layer0.conv.weight
+[128,1,3,3], layer0.norm.weight [128], layer1.conv.weight [32,128,3,3],
+layer1.norm.weight [32], input_proj_linear.weight [1024,1024]. All suffixes
+share that prefix. No frontend biases or clipping scalars exist. This slice
+must not change block clipping defaults or imply their inventory is loaded.
+
+Both actual decoder loaders shall retain these tensors in the existing
+Gemma4AudioWeights host-F32 representation, preserving row-major Conv2d and
+[out,in] linear layout. This is reference storage, twice the BF16 payload size,
+not production BF16 execution. Retain separately typed frontend dimensions and
+epsilon, with owned full JSON already on audio.config. Reject malformed or
+missing required hidden_size/epsilon, non-two-element/nonpositive channels,
+zero projected width, nonrepresentable float epsilon, wrong shape/dtype and
+checked F32 size overflow before tensor lookup/allocation. Missing channels
+use source defaults; explicit null is invalid. Optional absent audio remains
+empty. Output projector fallback semantics and scaled-FP8 connector behavior
+remain unchanged. Frontend weights require actual BF16, not guessed FP8 support.
+
+Tiny original-structure fixtures precede implementation and exercise both
+entrypoints, each tensor's contents/layout and shard-independent lifetime,
+missing tensors, shape/dtype/config and exact overflow diagnostics. Preserve
+all prior loader tests, actual-flags header checks and 28 metadata regressions.
+Full preflight remains pending and prohibited for this bounded task.
+
+Remaining source inventory: 746 of 751 audio_tower tensors: output_proj.weight
+[1536,1024], output_proj.bias [1536], plus 744 tensors across 12 Conformer
+layers (62 each, including clipping). The existing embed_audio connector is
+already retained separately. Relative positional encoding has no persistent
+header tensor. Typed block/output config, block and output weights, encoder
+hooks, production dtype execution and all numeric/runtime gates remain owed.
