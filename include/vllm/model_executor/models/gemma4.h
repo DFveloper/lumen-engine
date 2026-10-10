@@ -47,6 +47,7 @@
 #pragma once
 
 #include "vllm/model_executor/models/gemma4_vision.h"
+#include <optional>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -122,6 +123,8 @@ struct Gemma4ModalityWeights {
 struct Gemma4Weights {
   // Partial inventory: patch tensors and blocks; clipping/execution remain owed.
   multimodal::Gemma4VisionWeights vision_patch_weights;
+  // Inventory configuration, not a claim of GQA execution by the MHA forward.
+  std::optional<multimodal::Gemma4VisionConfig> vision_config;
   Gemma4ModalityWeights vision;
   Gemma4ModalityWeights audio;
   bool tie_word_embeddings = true;

@@ -3,6 +3,8 @@
 // reduced to avoid allocating the original vocabulary and PLE tables.
 #include <doctest/doctest.h>
 #include <filesystem>
+#include <cmath>
+#include <limits>
 #include <cstring>
 #include <fstream>
 #include <random>
@@ -54,6 +56,13 @@ struct Fixture {
     add("model.vision_tower.patch_embedder.position_embedding_table", {2, 2, 3});
     for (int layer = 0; layer < 2; ++layer)
       for (const auto& e : inventory) add(block_prefix(layer) + e.name, e.shape);
+    for (int layer = 0; layer < 2; ++layer)
+      for (size_t i = 0; i < 7; ++i) {
+        std::string base = inventory[i].name;
+        base.resize(base.size() - std::string("linear.weight").size());
+        for (const auto* bound : {"input_min", "input_max", "output_min", "output_max"})
+          add(block_prefix(layer) + base + bound, {});
+      }
     add("model.language_model.embed_tokens.weight", {3, 2});
     add("model.language_model.norm.weight", {2});
     const std::string p = "model.language_model.layers.0.";
@@ -517,4 +526,155 @@ TEST_CASE("E4B vision blocks: invalid dimensions and overflow fail before alloca
   Fixture f; f.add(vision_proj, {2, 3}); auto c = patch_config();
   c.raw["vision_config"]["num_key_value_heads"] = 3;
   reject_mm(f, c, "head divisibility");
+}
+
+namespace {
+const std::vector<vllm::multimodal::Clip Block::*> clips = {
+  &Block::q_clip, &Block::k_clip, &Block::v_clip, &Block::o_clip,
+  &Block::gate_clip, &Block::up_clip, &Block::down_clip};
+const std::vector<std::string> bounds = {"input_min", "input_max", "output_min", "output_max"};
+std::string clip_name(int layer, size_t i, size_t j) {
+  std::string base = inventory[i].name;
+  base.resize(base.size() - std::string("linear.weight").size());
+  return block_prefix(layer) + base + bounds[j];
+}
+void set_bound(Fixture& f, const std::string& name, uint16_t bits) {
+  auto offset = f.header[name]["data_offsets"][0].get<size_t>();
+  f.bytes[offset] = static_cast<char>(bits & 255);
+  f.bytes[offset + 1] = static_cast<char>(bits >> 8);
+}
+vllm::Gemma4Weights load_fixture(Fixture& f, const vllm::HfConfig& c, bool owned) {
+  auto shards = f.open();
+  if (owned) return vllm::LoadGemma4ForConditionalGenerationWeightsOwned(
+      std::make_shared<const std::vector<vllm::SafetensorsFile>>(std::move(shards)), c);
+  return vllm::LoadGemma4ForConditionalGenerationWeights(shards, c);
+}
+}
+TEST_CASE("E4B clipping: each scalar and layer survives both loader lifetimes") {
+  for (bool owned : {false, true}) {
+    vllm::Gemma4Weights w;
+    {
+      Fixture f; f.add(vision_proj, {2, 3}); auto c = patch_config();
+      c.raw["vision_config"]["use_clipped_linears"] = true;
+      for (int l = 0; l < 2; ++l) for (size_t i = 0; i < 7; ++i)
+        for (size_t j = 0; j < 4; ++j)
+          set_bound(f, clip_name(l, i, j), uint16_t(0x3f80 + 32*l + 4*i + j));
+      w = load_fixture(f, c, owned);
+    }
+    REQUIRE(w.vision_patch_weights.blocks.size() == 2);
+    for (int l = 0; l < 2; ++l) for (size_t i = 0; i < 7; ++i) {
+      auto v = w.vision_patch_weights.blocks[l].*clips[i];
+      std::vector<float> actual = {v.in_min, v.in_max, v.out_min, v.out_max};
+      for (size_t j = 0; j < 4; ++j)
+        CHECK(actual[j] == 1.0f + float(32*l + 4*i + j)/128.0f);
+    }
+  }
+}
+TEST_CASE("E4B clipping: required scalar inventory rejects malformed bounds") {
+  for (int l = 0; l < 2; ++l) for (size_t i = 0; i < 7; ++i)
+    for (size_t j = 0; j < 4; ++j) for (int bad = 0; bad < 5; ++bad) {
+      Fixture f; f.add(vision_proj, {2, 3}); auto c = patch_config();
+      c.raw["vision_config"]["use_clipped_linears"] = true;
+      auto name = clip_name(l,i,j);
+      if (bad == 0) f.header.erase(name);
+      if (bad == 1) f.header[name]["shape"] = {1};
+      if (bad == 2) f.header[name]["dtype"] = "F16";
+      if (bad == 3) set_bound(f,name,0x7fc0); // NaN
+      if (bad == 4) set_bound(f,name,j%2 == 0 ? 0x4000 : 0x0000);
+      reject_mm(f,c,bad == 4 ? "clip bounds order" : name);
+    }
+}
+TEST_CASE("E4B clipping: infinite defaults and equal endpoints are valid") {
+  for (bool owned : {false,true}) for (bool enabled : {false,true}) {
+    Fixture f; f.add(vision_proj, {2,3}); auto c = patch_config();
+    if (enabled) c.raw["vision_config"]["use_clipped_linears"] = true;
+    for (int l=0;l<2;++l) for(size_t i=0;i<7;++i) for(size_t j=0;j<4;++j) {
+      auto name=clip_name(l,i,j);
+      if (enabled) set_bound(f,name,j%2 == 0 ? 0xff80 : 0x7f80);
+      else f.header.erase(name);
+    }
+    auto w=load_fixture(f,c,owned);
+    for (const auto& b : w.vision_patch_weights.blocks) for(auto member:clips) {
+      auto v=b.*member;
+      CHECK(v.in_min == -std::numeric_limits<float>::infinity());
+      CHECK(v.out_min == -std::numeric_limits<float>::infinity());
+      CHECK(v.in_max == std::numeric_limits<float>::infinity());
+      CHECK(v.out_max == std::numeric_limits<float>::infinity());
+    }
+  }
+}
+TEST_CASE("E4B typed vision config: invalid execution parameters are refused") {
+  for (const auto& item : std::vector<std::pair<std::string,json>>{
+    {"pooling_kernel_size",0}, {"pooling_kernel_size",1.5}, {"pooling_kernel_size",INT64_MAX},
+    {"rms_norm_eps",1e-100}, {"rms_norm_eps",1e100},
+    {"use_clipped_linears",1}, {"standardize",true}, {"attention_bias",true},
+    {"hidden_activation","relu"}, {"attention_dropout",-0.1}, {"attention_dropout",1.0},
+    {"rope_parameters",{{"rope_type","linear"},{"rope_theta",100}}},
+    {"rope_parameters",{{"rope_type","default"},{"rope_theta",0}}}}) {
+    Fixture f; f.add(vision_proj,{2,3}); auto c=patch_config();
+    c.raw["vision_config"][item.first]=item.second; reject_mm(f,c,item.first);
+  }
+}
+TEST_CASE("E4B typed vision config: defaults overrides and absence survive both loaders") {
+  for (bool owned : {false, true}) {
+    Fixture absent;
+    CHECK_FALSE(load_fixture(absent, config(), owned).vision_config.has_value());
+    for (bool custom : {false, true}) {
+      vllm::Gemma4Weights w;
+      {
+        Fixture f; f.add(vision_proj, {2, 3}); auto c = patch_config();
+        if (custom) {
+          c.raw["vision_config"]["pooling_kernel_size"] = 2;
+          c.raw["vision_config"]["rope_parameters"] = {{"rope_type", "default"}, {"rope_theta", 250.0}};
+          c.raw["vision_config"]["rms_norm_eps"] = 0.125;
+          c.raw["vision_config"]["attention_dropout"] = 0.25;
+          c.raw["vision_config"]["use_clipped_linears"] = true;
+        } else {
+          c.raw["vision_config"]["use_clipped_linears"] = false;
+          // Explicit false must ignore even poisoned, otherwise-unused bounds.
+          set_bound(f, clip_name(0, 0, 0), 0x7fc0);
+        }
+        w = load_fixture(f, c, owned);
+      }
+      REQUIRE(w.vision_config.has_value());
+      const auto& c = *w.vision_config;
+      CHECK(c.hidden_size == 3); CHECK(c.text_hidden_size == 2);
+      CHECK(c.num_heads == 2); CHECK(c.num_kv_heads == 1);
+      CHECK(c.head_dim == 2); CHECK(c.depth == 2);
+      CHECK(c.intermediate_size == 5); CHECK(c.patch_size == 1);
+      CHECK(c.patch_dim() == 3); CHECK(c.position_embedding_size == 2);
+      CHECK(c.pooling_kernel_size == (custom ? 2 : 3));
+      CHECK(c.rope_theta == (custom ? 250.0 : 100.0));
+      CHECK(c.rms_norm_eps == (custom ? 0.125f : 1e-6f));
+      CHECK(c.attention_dropout == (custom ? 0.25f : 0.0f));
+      CHECK(c.use_clipped_linears == custom);
+      if (custom) for (const auto& b : w.vision_patch_weights.blocks)
+        for (auto member : clips) {
+          const auto v = b.*member;
+          CHECK(v.in_min == 1); CHECK(v.in_max == 1);
+          CHECK(v.out_min == 1); CHECK(v.out_max == 1);
+        }
+    }
+  }
+}
+TEST_CASE("E4B typed vision config: malformed types and nonfinite numbers fail closed") {
+  for (const auto* key : {"pooling_kernel_size", "use_clipped_linears", "standardize",
+                          "attention_bias", "attention_dropout", "hidden_activation"})
+    for (const auto& value : {json(nullptr), json("bad"), json::array()}) {
+      Fixture f; f.add(vision_proj, {2,3}); auto c = patch_config();
+      c.raw["vision_config"][key] = value; reject_mm(f, c, key);
+    }
+  for (double value : {std::numeric_limits<double>::infinity(),
+                       std::numeric_limits<double>::quiet_NaN()})
+    for (const auto* key : {"rms_norm_eps", "attention_dropout", "rope_parameters"}) {
+      Fixture f; f.add(vision_proj, {2,3}); auto c = patch_config();
+      c.raw["vision_config"][key] = std::string(key) == "rope_parameters"
+          ? json{{"rope_theta", value}} : json(value);
+      reject_mm(f, c, key);
+    }
+  for (const auto& value : {json(false), json::array(), json("bad")}) {
+    Fixture f; f.add(vision_proj, {2,3}); auto c = patch_config();
+    c.raw["vision_config"]["rope_parameters"] = value;
+    reject_mm(f, c, "rope_parameters");
+  }
 }

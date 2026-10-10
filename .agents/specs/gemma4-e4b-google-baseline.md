@@ -430,3 +430,32 @@ refusal and preserved BF16/scaled-FP8 matrix layout. Red precedes product
 changes. Run only the minimal CPU target, actual-flags header syntax checks,
 28 metadata regressions and focused record/style/trailer checks. Full preflight
 and audio, hooks, original-checkpoint numeric/runtime gates remain pending.
+
+### Clipping/config verification
+
+Both real loader overloads now retain source-named BF16 scalar bounds and an
+optional typed vision config. Disabled/absent clipping leaves infinite no-op
+bounds; enabled clipping requires all four scalars for every linear. NaN,
+reversed order, non-scalar shapes and non-BF16 bounds fail closed. Existing
+matrix loading, including scaled FP8 conversion, is unchanged. Typed config
+retains GQA dimensions but does not extend the existing MHA execution path.
+Activation, bias and standardization are restricted to the existing forward's
+semantics; dropout is retained for inventory but inference does not apply it.
+
+Red before product changes: 27 cases, 23 passing, 922 failed assertions out of
+2416; original 23 cases passed. Final green: 29 cases, 2648 assertions, zero
+skips, plus exact-count CTest 1/1 PASS. Fixtures cover every bound on both
+layers through both loaders, lifetime, infinite/equal endpoints, explicit false,
+missing configuration, overrides, malformed types, NaN/Inf config and overflow.
+Existing BF16/scaled-FP8 layout tests remain green. Nine direct header consumers
+pass fresh syntax compilation using actual compile_commands flags. All 28
+metadata tests and offline metadata CLI pass; runtime_accepted remains false.
+Record and symbol-anchor checks pass. Evidence is in the clipping scratch
+folder above (under 1 MiB); only the reused minimal CPU target was built, -j2.
+
+No preflight was launched on resume. Process inspection found no remaining
+process from the earlier mistaken, timed-out preflight; none was killed.
+Full preflight is pending, not green. T02 is PARTIAL: audio inventory and
+encoder/hook wiring remain owed. Original-checkpoint inference, numerical
+acceptance, GQA execution and runtime prerequisites are not established.
+Root verification and independent review of this slice remain pending.

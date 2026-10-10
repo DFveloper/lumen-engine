@@ -380,7 +380,7 @@ Gemma4ModalityWeights LoadModalityProjector(
 }
 
 // Pinned Transformers a08ace4b modeling_gemma4.py:579-588.
-// This is patch inventory, not an executable encoder (blocks/clips remain owed).
+// This retains patch inventory; encoder/hook wiring remains owed.
 multimodal::Gemma4VisionWeights LoadVisionPatches(
     const TensorResolver& get, const nlohmann::json& cfg) {
   multimodal::Gemma4VisionWeights w;
@@ -422,7 +422,7 @@ multimodal::Gemma4VisionWeights LoadVisionPatches(
 }
 
 // Transformers a08ace4b modeling_gemma4.py:168-215,927-1002,1036-1038.
-// Retain learned block inventory only: clipping and encoder execution are owed.
+// Retain learned block inventory; clipping is loaded separately below.
 void LoadVisionBlocks(const TensorResolver& get, const nlohmann::json& cfg,
                       multimodal::Gemma4VisionWeights& w) {
   if (cfg.is_null()) return;
@@ -479,6 +479,95 @@ void LoadVisionBlocks(const TensorResolver& get, const nlohmann::json& cfg,
     b.q_norm = load("self_attn.q_norm.weight", {hd});
     b.k_norm = load("self_attn.k_norm.weight", {hd});
     w.blocks.push_back(std::move(b));
+  }
+}
+
+// Source: pinned Transformers Gemma4VisionConfig and Gemma4ClippableLinear.
+// Called after dimension/byte validation by the patch and block loaders.
+multimodal::Gemma4VisionConfig LoadVisionConfig(const nlohmann::json& cfg,
+                                               int64_t text_hidden) {
+  multimodal::Gemma4VisionConfig c;
+  c.hidden_size = cfg.at("hidden_size").get<int64_t>();
+  c.num_heads = cfg.at("num_attention_heads").get<int64_t>();
+  c.num_kv_heads = cfg.at("num_key_value_heads").get<int64_t>();
+  c.depth = cfg.at("num_hidden_layers").get<int64_t>();
+  c.intermediate_size = cfg.at("intermediate_size").get<int64_t>();
+  c.head_dim = cfg.at("head_dim").get<int64_t>();
+  c.patch_size = cfg.at("patch_size").get<int64_t>();
+  c.position_embedding_size = cfg.at("position_embedding_size").get<int64_t>();
+  c.text_hidden_size = text_hidden;
+  const auto boolean = [&](const char* key) {
+    auto it = cfg.find(key);
+    if (it == cfg.end()) return false;
+    VT_CHECK(it->is_boolean(), std::string("gemma4: vision_config ") + key);
+    return it->get<bool>();
+  };
+  c.use_clipped_linears = boolean("use_clipped_linears");
+  VT_CHECK(!boolean("standardize"), "gemma4: vision_config standardize unsupported");
+  VT_CHECK(!boolean("attention_bias"), "gemma4: vision_config attention_bias unsupported");
+  VT_CHECK(!cfg.contains("hidden_activation") || cfg["hidden_activation"] == "gelu_pytorch_tanh",
+           "gemma4: vision_config hidden_activation unsupported");
+  if (cfg.contains("pooling_kernel_size")) {
+    const auto& k = cfg["pooling_kernel_size"];
+    VT_CHECK(k.is_number_integer() && k > 0 && k <= INT64_MAX,
+             "gemma4: vision_config pooling_kernel_size must be a positive integer");
+    c.pooling_kernel_size = k.get<int64_t>();
+  }
+  VT_CHECK(c.pooling_kernel_size <= INT64_MAX / c.pooling_kernel_size,
+           "gemma4: vision_config pooling_kernel_size overflow");
+  const double eps = cfg.at("rms_norm_eps").get<double>();
+  VT_CHECK(eps <= std::numeric_limits<float>::max() &&
+               eps >= std::numeric_limits<float>::denorm_min(),
+           "gemma4: vision_config rms_norm_eps float range");
+  c.rms_norm_eps = static_cast<float>(eps);
+  if (cfg.contains("attention_dropout")) {
+    const auto& d = cfg["attention_dropout"];
+    VT_CHECK(d.is_number() && std::isfinite(d.get<double>()) &&
+                 d.get<double>() >= 0 && d.get<double>() < 1,
+             "gemma4: vision_config attention_dropout range");
+    c.attention_dropout = d.get<float>();
+  }
+  if (cfg.contains("rope_parameters") && !cfg["rope_parameters"].is_null()) {
+    const auto& rope = cfg["rope_parameters"];
+    VT_CHECK(rope.is_object() && rope.value("rope_type", nlohmann::json("default")) == "default",
+             "gemma4: vision_config rope_parameters type unsupported");
+    const auto theta = rope.value("rope_theta", nlohmann::json(100.0));
+    VT_CHECK(theta.is_number() && std::isfinite(theta.get<double>()) && theta.get<double>() > 0,
+             "gemma4: vision_config rope_parameters theta must be positive and finite");
+    c.rope_theta = theta.get<double>();
+  }
+  return c;
+}
+
+void LoadVisionClips(const TensorResolver& get, multimodal::Gemma4VisionWeights& w) {
+  using Block = multimodal::Gemma4VisionBlockWeights;
+  const std::pair<const char*, multimodal::Clip Block::*> entries[] = {
+      {"self_attn.q_proj", &Block::q_clip}, {"self_attn.k_proj", &Block::k_clip},
+      {"self_attn.v_proj", &Block::v_clip}, {"self_attn.o_proj", &Block::o_clip},
+      {"mlp.gate_proj", &Block::gate_clip}, {"mlp.up_proj", &Block::up_clip},
+      {"mlp.down_proj", &Block::down_clip}};
+  for (size_t l = 0; l < w.blocks.size(); ++l) {
+    const auto prefix = "model.vision_tower.encoder.layers." + std::to_string(l) + ".";
+    for (const auto& [projection, member] : entries) {
+      const auto scalar = [&](const char* suffix) {
+        const auto name = prefix + projection + "." + suffix;
+        const auto& t = get(name);
+        VT_CHECK(t.shape.empty() && t.dtype == "BF16",
+                 "gemma4: " + name + " must be BF16 scalar []");
+        uint16_t bits;
+        std::memcpy(&bits, t.data, sizeof(bits));
+        const float value = vt::BF16ToF32(bits);
+        VT_CHECK(!std::isnan(value), "gemma4: " + name + " is NaN");
+        return value;
+      };
+      auto& clip = w.blocks[l].*member;
+      clip.in_min = scalar("input_min");
+      clip.in_max = scalar("input_max");
+      clip.out_min = scalar("output_min");
+      clip.out_max = scalar("output_max");
+      VT_CHECK(clip.in_min <= clip.in_max && clip.out_min <= clip.out_max,
+               "gemma4: clip bounds order: " + prefix + projection);
+    }
   }
 }
 
@@ -550,6 +639,10 @@ Gemma4Weights LoadImpl(const std::vector<SafetensorsFile>& shards,
   w.audio = LoadModalityProjector(get, config, "audio_config", "model.embed_audio", true);
   w.vision_patch_weights = LoadVisionPatches(get, w.vision.config);
   LoadVisionBlocks(get, w.vision.config, w.vision_patch_weights);
+  if (!w.vision.config.is_null()) {
+    w.vision_config = LoadVisionConfig(w.vision.config, H);
+    if (w.vision_config->use_clipped_linears) LoadVisionClips(get, w.vision_patch_weights);
+  }
 
   // Keep shards alive for borrowed experts
   w.shards_keepalive = shards_owner;

@@ -42,6 +42,7 @@
 
 #include <array>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "vt/backend.h"
@@ -61,6 +62,9 @@ struct Gemma4VisionConfig {
   int64_t text_hidden_size = 2560;  // E4B text_config.hidden_size
   float rms_norm_eps = 1e-6f;
   double rope_theta = 100.0;
+  bool use_clipped_linears = false;
+  // Loader accepts only the existing tanh-GELU, unbiased, unstandardized path.
+  float attention_dropout = 0.0f;  // Retained; inference does not apply dropout.
 
   int64_t patch_dim() const { return 3 * patch_size * patch_size; }  // 768
 };
@@ -70,8 +74,10 @@ struct Gemma4VisionConfig {
 // are per-linear scalars stored in the checkpoint. patch_embedder.input_proj and
 // embed_vision.embedding_projection are PLAIN nn.Linear (no clip).
 struct Clip {
-  float in_min = -3.4e38f, in_max = 3.4e38f;    // +/-inf default == no-op
-  float out_min = -3.4e38f, out_max = 3.4e38f;
+  float in_min = -std::numeric_limits<float>::infinity(),
+        in_max = std::numeric_limits<float>::infinity();    // +/-inf default == no-op
+  float out_min = -std::numeric_limits<float>::infinity(),
+        out_max = std::numeric_limits<float>::infinity();
 };
 
 // All weights host-side row-major RAW BF16 BITS (`uint16_t`, as torch stores:
