@@ -498,9 +498,15 @@ TEST_CASE("E4B vision blocks: invalid dimensions and overflow fail before alloca
     Fixture f; f.add(vision_proj, {2, 3}); auto c = patch_config();
     c.raw["vision_config"].erase(key); reject_mm(f, c, key);
   }
-  for (const auto* key : {"num_hidden_layers", "num_attention_heads", "head_dim", "intermediate_size"}) {
+  for (const auto* key : {"num_hidden_layers", "num_attention_heads", "intermediate_size"}) {
     Fixture f; f.add(vision_proj, {2, 3}); auto c = patch_config();
     c.raw["vision_config"][key] = INT64_MAX; reject_mm(f, c, "overflow");
+  }
+  // Existing positive heads overflow the product before any matrix-size check.
+  {
+    Fixture f; f.add(vision_proj, {2, 3}); auto c = patch_config();
+    c.raw["vision_config"]["head_dim"] = INT64_MAX;
+    reject_mm(f, c, "gemma4: vision_config head dimension overflow");
   }
   // Head products fit int64, but matrix bytes overflow with hidden_size=3.
   {
