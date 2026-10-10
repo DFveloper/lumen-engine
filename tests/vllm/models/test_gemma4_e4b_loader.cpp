@@ -387,6 +387,12 @@ TEST_CASE("E4B vision patches: absent modality and dimension overflow stay bound
     c.raw["vision_config"][key] = INT64_MAX;
     reject_mm(f, c, key);
   }
+  // The patch area fits int64, but the BF16 projection byte count does not.
+  {
+    Fixture f; f.add(vision_proj, {2, 3}); auto c = patch_config();
+    c.raw["vision_config"]["patch_size"] = 1000000000;
+    reject_mm(f, c, "patch_size tensor size overflow");
+  }
   // The dense materializer supports FP8 matrices, not rank-three tables.
   {
     Fixture f; f.add(vision_proj, {2, 3});
