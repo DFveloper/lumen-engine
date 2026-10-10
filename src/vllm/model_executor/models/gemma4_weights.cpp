@@ -381,6 +381,9 @@ Gemma4Weights LoadImpl(const std::vector<SafetensorsFile>& shards,
 
   const LayerTopo topo = MakeTopo(config);
   Gemma4Weights w;
+  const auto tie = text.find("tie_word_embeddings");
+  VT_CHECK(tie == text.end() || tie->is_null() || tie->is_boolean(),
+           "gemma4: tie_word_embeddings must be boolean or null");
   w.tie_word_embeddings = RawBool(text, "tie_word_embeddings", true);
   w.embed_tokens = LoadBf16Direct(get, "model.language_model.embed_tokens.weight");
   if (load_ple) {
@@ -392,8 +395,15 @@ Gemma4Weights LoadImpl(const std::vector<SafetensorsFile>& shards,
         LoadBf16Direct(get, "model.language_model.per_layer_projection_norm.weight");
   }
   w.final_norm = LoadBf16Direct(get, "model.language_model.norm.weight");
-  if (!w.tie_word_embeddings && names.count("lm_head.weight"))
+  if (!w.tie_word_embeddings) {
+    // vLLM gemma4.py at a7c23ac96d: ParallelLMHead(vocab_size, hidden_size)
+    // is tied only when configured. Missing weights must not trigger a tied
+    // fallback in Forward; preserve the shared transpose loader for valid heads.
+    const StTensor& head = get("lm_head.weight");
+    VT_CHECK((head.shape == std::vector<int64_t>{config.vocab_size, H}),
+             "gemma4: lm_head.weight must have shape [vocab_size, hidden_size]");
     w.lm_head = LoadBf16Transposed(get, "lm_head.weight");
+  }
 
   // Keep shards alive for borrowed experts
   w.shards_keepalive = shards_owner;

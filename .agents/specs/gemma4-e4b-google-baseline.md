@@ -181,3 +181,28 @@ T01B is a HARD dependency for every numeric/runtime acceptance, including T12
 and T13. Synthetic fixtures never establish original-Google inference.
 This scheduling clarification changes no runtime barrier or acceptance criterion.
 Full preflight remains PENDING under the recorded failures. No rerun is authorized.
+
+## T02 bounded output-head slice
+
+The first executable slice validates tied/untied output-head loading through
+real safetensors and Gemma loader sources. The original Google config is tied.
+Pinned vLLM `vllm/model_executor/models/gemma4.py` at
+`a7c23ac96d7806e7c7e7d862eadbce5a33529b94` constructs `ParallelLMHead` with
+vocabulary and hidden dimensions, and ties it only when configured.
+The downloaded source SHA-256 is
+`205e9c543b263b2cebf0a8567de629597e179713f02e505cc4f94fb5168f566a`.
+This is source grounding, not oracle execution.
+
+CPU tests reproduce missing and malformed untied heads before the fix.
+The expanded red run executed 8 cases with 8 failed assertions and zero skips.
+The fix requires the untied head and its exact configured shape, and rejects
+nonboolean nonnull tie flags. Absent/null defaults and explicit tying remain
+unchanged. Positive controls check BF16 transposition and both loader overloads.
+The green run executed 8 cases and 38 assertions with zero failures or skips.
+
+T02 remains PARTIAL pending tower/projector inventory, clipping-scalar loading,
+modality-config validation, and original-shape tower fixtures. Reduced text
+fixtures and original-config refusal tests do not prove those guarantees.
+PLE, KV topology, text math, tower execution, and runtime gates are unchanged.
+Root rerun and independent review of this immutable slice remain required.
+The owning milestone issue remains OPEN.

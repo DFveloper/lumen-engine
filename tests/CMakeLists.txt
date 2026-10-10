@@ -4749,3 +4749,35 @@ vllm_cpp_add_test(test_qwen38_27b_radixark_w4a4_notice
   vllm/models/test_qwen38_27b_radixark_w4a4_notice.cpp)
 target_include_directories(test_qwen38_27b_radixark_w4a4_notice PRIVATE
   ${CMAKE_SOURCE_DIR}/src)
+
+# Bounded CPU loader gate: compile real loader translation units rather than
+# force-linking every model/backend registrar in vllm. Section collection removes
+# unrelated Qwen entrypoints, not any function reachable from the Gemma loader.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  add_executable(test_gemma4_e4b_loader
+    vllm/models/test_gemma4_e4b_loader.cpp
+    ../src/vllm/model_executor/models/gemma4_weights.cpp
+    ../src/vllm/model_executor/models/qwen3_5_weights.cpp
+    ../src/vllm/model_executor/model_loader/safetensors_reader.cpp
+    ../src/vllm/model_executor/model_loader/read_only_file_mapping.cpp
+    ../src/vllm/model_executor/model_loader/nvfp4_dequant.cpp
+    ../src/vllm/model_executor/model_loader/mxfp4_dequant.cpp
+    ../src/vt/dtype.cpp
+    ../src/vllm/transformers_utils/hf_config.cpp)
+  target_include_directories(test_gemma4_e4b_loader PRIVATE
+    ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
+  target_link_libraries(test_gemma4_e4b_loader PRIVATE vllm_test_main)
+  target_compile_options(test_gemma4_e4b_loader PRIVATE -ffunction-sections -fdata-sections)
+  target_link_options(test_gemma4_e4b_loader PRIVATE -Wl,--gc-sections)
+  vllm_cpp_set_warnings(test_gemma4_e4b_loader)
+  add_test(NAME test_gemma4_e4b_loader COMMAND test_gemma4_e4b_loader)
+else()
+  vllm_cpp_add_test(test_gemma4_e4b_loader vllm/models/test_gemma4_e4b_loader.cpp)
+endif()
+
+target_compile_definitions(test_gemma4_e4b_loader PRIVATE
+  E4B_CONFIG_PATH="${CMAKE_SOURCE_DIR}/tests/fixtures/gemma4_e4b_google/config.json")
+# Do not accept an empty executable or skipped cases as this synthetic gate.
+set_tests_properties(test_gemma4_e4b_loader PROPERTIES
+  PASS_REGULAR_EXPRESSION "test cases: +8 [|] +8 passed [|] +0 failed [|] +0 skipped"
+  FAIL_REGULAR_EXPRESSION "Status: FAILURE")
