@@ -206,3 +206,45 @@ fixtures and original-config refusal tests do not prove those guarantees.
 PLE, KV topology, text math, tower execution, and runtime gates are unchanged.
 Root rerun and independent review of this immutable slice remain required.
 The owning milestone issue remains OPEN.
+
+## T02 modality projector slice contract
+
+The next bounded slice retains both modality projectors in the actual decoder
+weight bundle. Full tower loading is deferred: the existing vision type stores
+BF16 vectors, while the audio type is an F32 reference, not a production BF16
+encoder representation. Do not populate that reference and claim production audio.
+
+Source: pinned vLLM `vllm/model_executor/models/gemma4_mm.py`,
+`Gemma4MultimodalEmbedder.__init__` (lines 964–997) and
+`Gemma4ForConditionalGeneration.hf_to_vllm_mapper` (1045–1058), at
+`a7c23ac96d7806e7c7e7d862eadbce5a33529b94`. Local source SHA-256:
+`ee9b33f5f3d76bfec371dfc65292a915cc5b4741367ba0b28a450a5af8c40f9f`.
+The executing constructor uses weightless pre-projection RMSNorm and a biasless
+linear, despite its stale class docstring saying post-projection norm.
+Checkpoint names are `model.embed_vision.embedding_projection.weight` and
+`model.embed_audio.embedding_projection.weight`. Source shapes are
+[text hidden, vision hidden] and [text hidden, audio output_proj_dims]; the
+constructor falls back to audio hidden for absent/null/zero output_proj_dims.
+The original metadata supplies 2560, 768, and 1536 respectively.
+
+For this staged loader contract, absent/null modality config preserves legacy
+text-only loading; false and other nonobject values are errors, not absence.
+An object must supply a positive integer hidden_size and positive finite
+rms_norm_eps. Audio output_proj_dims may be absent/null/zero (hidden fallback)
+or a positive integer. Reject malformed values before projector allocation.
+Retain the full modality config alongside an owned BF16 raw [out,in] projector,
+including clipping flags and encoder fields for subsequent tower work. Validate
+exact source shape and use the existing dense materializer, preserving its
+scaled F8_E4M3 support rather than adding a global BF16-only guard.
+
+Tests enter both decoder loader overloads using small real safetensors.
+Cover config refusal, required tensor accounting, rank/orientation errors,
+BF16 byte preservation, F16 refusal, scaled FP8 preservation, ownership after
+shard destruction, and original-config shape rejection without full allocation.
+This is projector accounting, not tower accounting or numerical equivalence.
+T07–T09 must connect the retained projectors to encoder execution and hooks;
+MODEL-MM-gemma4-mm-gemma4-for-conditional-generation and OPEN
+ISSUE-LOCAL-01M4KSETGY63TDEDPF6EHQHRA8 own that wiring. Complete tower inventory,
+clipping-scalar loading, full modality validation, original-shape tower fixtures,
+assistant/tools/image/audio/video acceptance, and T12/T13 remain owed.
+Full preflight remains PENDING; another full run is prohibited for this slice.
