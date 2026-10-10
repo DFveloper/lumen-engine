@@ -94,6 +94,7 @@ TEST_CASE("E4B loader: untied head has vocab by hidden source shape") {
   c.raw["text_config"]["tie_word_embeddings"] = false;
   auto w = vllm::LoadGemma4ForConditionalGenerationWeights(shards, c);
   CHECK_FALSE(w.tie_word_embeddings); CHECK(w.lm_head.rank == 2);
+  CHECK(w.lm_head.dtype == vt::DType::kBF16);
   CHECK(w.lm_head.shape[0] == 2); CHECK(w.lm_head.shape[1] == 3);
   REQUIRE(w.lm_head.bytes.size() == 12);
   uint16_t actual[6]; std::memcpy(actual, w.lm_head.bytes.data(), sizeof(actual));
@@ -103,8 +104,25 @@ TEST_CASE("E4B loader: untied head has vocab by hidden source shape") {
   second.push_back(vllm::SafetensorsFile::Open(f.path.string()));
   auto owned = std::make_shared<const std::vector<vllm::SafetensorsFile>>(std::move(second));
   auto ow = vllm::LoadGemma4ForConditionalGenerationWeightsOwned(owned, c);
-  CHECK(ow.lm_head.bytes.size() == w.lm_head.bytes.size());
+  CHECK(ow.lm_head.dtype == vt::DType::kBF16);
+  REQUIRE(ow.lm_head.bytes.size() == w.lm_head.bytes.size());
   CHECK(std::memcmp(ow.lm_head.bytes.data(), w.lm_head.bytes.data(), 12) == 0);
+}
+TEST_CASE("E4B loader: correctly shaped F16 untied head is refused by both overloads") {
+  Fixture f; f.add("lm_head.weight", {3, 2});
+  // F16 has the same byte width: only the dtype changes, not shape or payload.
+  f.header["lm_head.weight"]["dtype"] = "F16";
+  auto shards = f.open(); auto c = config();
+  c.raw["text_config"]["tie_word_embeddings"] = false;
+  CHECK_THROWS_WITH(vllm::LoadGemma4ForConditionalGenerationWeights(shards, c),
+                    doctest::Contains("BF16"));
+  CHECK_THROWS_WITH(vllm::LoadGemma4ForConditionalGenerationWeights(shards, c),
+                    doctest::Contains("lm_head.weight"));
+  auto owned = std::make_shared<const std::vector<vllm::SafetensorsFile>>(std::move(shards));
+  CHECK_THROWS_WITH(vllm::LoadGemma4ForConditionalGenerationWeightsOwned(owned, c),
+                    doctest::Contains("BF16"));
+  CHECK_THROWS_WITH(vllm::LoadGemma4ForConditionalGenerationWeightsOwned(owned, c),
+                    doctest::Contains("lm_head.weight"));
 }
 TEST_CASE("E4B loader: malformed untied head shape is refused") {
   for (const auto& shape : std::vector<std::vector<int64_t>>{{2, 3}, {6}, {3, 1}}) {
