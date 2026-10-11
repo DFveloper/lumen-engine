@@ -4756,6 +4756,8 @@ target_include_directories(test_qwen38_27b_radixark_w4a4_notice PRIVATE
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   add_executable(test_gemma4_e4b_loader
     vllm/models/test_gemma4_e4b_loader.cpp
+    ../src/vllm/multimodal/gemma4_audio_processor.cpp
+    ../src/vllm/multimodal/mel_filter_bank.cpp
     ../src/vllm/model_executor/models/gemma4_audio_encoder.cpp
     ../src/vllm/model_executor/models/gemma4_audio.cpp
     ../src/vllm/model_executor/models/model_registry.cpp
@@ -4784,5 +4786,18 @@ target_compile_definitions(test_gemma4_e4b_loader PRIVATE
   E4B_CONFIG_PATH="${CMAKE_SOURCE_DIR}/tests/fixtures/gemma4_e4b_google/config.json")
 # Do not accept an empty executable or skipped cases as this synthetic gate.
 set_tests_properties(test_gemma4_e4b_loader PROPERTIES
-  PASS_REGULAR_EXPRESSION "test cases: +44 [|] +44 passed [|] +0 failed [|] +0 skipped"
+  PASS_REGULAR_EXPRESSION "test cases: +45 [|] +45 passed [|] +0 failed [|] +0 skipped"
+  FAIL_REGULAR_EXPRESSION "Status: FAILURE")
+
+# T05A bounded frontend: real TUs, no full-library linkage.
+add_executable(test_gemma4_e4b_audio_processor
+  vllm/multimodal/test_gemma4_e4b_audio_processor.cpp
+  ../src/vllm/multimodal/gemma4_audio_processor.cpp
+  ../src/vllm/multimodal/mel_filter_bank.cpp)
+target_include_directories(test_gemma4_e4b_audio_processor PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(test_gemma4_e4b_audio_processor PRIVATE vllm_test_main)
+vllm_cpp_set_warnings(test_gemma4_e4b_audio_processor)
+add_test(NAME test_gemma4_e4b_audio_processor COMMAND test_gemma4_e4b_audio_processor)
+set_tests_properties(test_gemma4_e4b_audio_processor PROPERTIES
+  PASS_REGULAR_EXPRESSION "test cases: +5 [|] +5 passed [|] +0 failed [|] +0 skipped"
   FAIL_REGULAR_EXPRESSION "Status: FAILURE")

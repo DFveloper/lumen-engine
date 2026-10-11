@@ -819,7 +819,7 @@ Gemma4AudioFeatureExtractor.__init__, _extract_spectrogram and __call__:
   [frames,128] into shared AudioKwargs [128,frames]. num_samples is retained
   input length; num_tokens = ceil(valid_frames/4), max 750.
 - Source __call__ defaults truncate at 480000 samples. Pinned vLLM
-  gemma4_mm.py::_get_max_audio_len derives the same 30 seconds from
+  gemma4_mm.py over-long audio warning derives the same 30 seconds from
   750*40ms and 16000 Hz. This bounded API rejects lengths beyond 480000
   instead of silently truncating; this is an explicit validation divergence.
   Other rates are rejected, not silently relabeled or passed through the
@@ -856,3 +856,34 @@ assets/work/2026-10-10-e4b-audio-preprocessing; -j2, incremental <256 MiB,
 external TMPDIR and Git ceiling; stop below 4 GiB free. Full preflight remains
 prohibited/PENDING. No GPU, weights, installs, broad library builds or remote
 writes. Implementation must await root verification and fresh review.
+
+
+### T05A implementation evidence
+
+Executable ProcessWaveform returns existing AudioKwargs, including masks and
+valid-token count, and is exercised through the loaded CPU encoder hook.
+Shared FFT extraction leaves w2v arithmetic unchanged; existing golden suite
+passes 6 cases/20973 assertions. New frontend suite passes 5 cases/5225
+assertions: independent scalar DFT, analytic silence/boundary table, malformed
+inputs, cap, FFT and 640 pinned-source NumPy values. Source capture uses
+unmodified AST method bodies, not full processor __call__; explicit padding
+is supplied. The source fixture and scalar tests are not full oracle parity.
+
+Loader suite passes 45 cases/7149 assertions, including all original 44/7139,
+zero skips; metadata 28/28 and exact-count CTest 2/2 pass. Consumer fixture
+uses 128 mel channels with constant output projection to independently assert
+rows/scalars, placeholder mismatch and no-valid-frame refusal; waveform-driven
+encoder numerical parity is not inferred. Eight actual-command header consumer
+checks pass. Three compiled scratch mutations fail: power instead of magnitude,
+clamp instead of additive floor and off-by-one mask. No red-before run was
+captured; these are post-implementation mutation checks. Evidence and exact
+reproduction are in assets/work/2026-10-10-e4b-audio-preprocessing/README.md.
+
+Source citation correction: the earlier `_get_max_audio_len` name was not an
+upstream symbol; the 480000 cap is directly __call__'s max_length default,
+consistent with the processor's 750*40ms budget. It is NOT the dummy input
+profiling length (which returns fft_length for this extractor). Rate refusal
+and over-cap refusal are explicit bounded API choices, not upstream parity.
+
+Await root verification and fresh review. No capability, T03/T04/T06, runtime,
+production-BF16, full-registry or full-preflight gate was promoted.

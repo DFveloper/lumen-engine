@@ -2,6 +2,7 @@
 // follow the pinned Google config in fixtures/gemma4_e4b_google. Dimensions are
 // reduced to avoid allocating the original vocabulary and PLE tables.
 #include <doctest/doctest.h>
+#include "vllm/multimodal/gemma4_audio_processor.h"
 #include <filesystem>
 #include <functional>
 #include <cmath>
@@ -1264,4 +1265,39 @@ TEST_CASE("E4B execution: small nonzero blocks distinguish fixed and configured 
     CHECK(out.embeds.Ptr<float>()[0]==doctest::Approx(expected0).epsilon(2e-5));
     CHECK(out.embeds.Ptr<float>()[1]==doctest::Approx(expected1).epsilon(2e-5));
   }
+}
+
+TEST_CASE("E4B preprocessing: waveform reaches loaded 128-mel encoder") {
+  Fixture f; auto c=audio_config();
+  c.raw["audio_config"]["subsampling_conv_channels"]={128,2};
+  add_audio(f,4,128,2); f.add(audio_proj,{2,5});
+  auto set=[&](const std::string& name, const std::vector<float>& values) {
+    const size_t start=f.header[name]["data_offsets"][0].get<size_t>();
+    for(size_t i=0;i<values.size();++i) {
+      auto bits=vt::F32ToBF16(values[i]); std::memcpy(f.bytes.data()+start+2*i,&bits,2);
+    }
+  };
+  set("model.audio_tower.output_proj.weight",std::vector<float>(20,0));
+  set("model.audio_tower.output_proj.bias",{1,2,3,4,5});
+  set(audio_proj,{1,0,0,0,0, 0,0,0,0,1});
+  auto shards=f.open(); auto w=vllm::LoadGemma4ForConditionalGenerationWeights(shards,c);
+  const vllm::ModelRegistration registration{"Gemma4ForConditionalGeneration",&vllm::kGemma4MmHooks,{}};
+  vllm::Gemma4LoadedModel model(registration,std::move(w));
+  vllm::multimodal::Gemma4AudioProcessor processor;
+  std::vector<float> waveform(800,0); waveform[17]=.5;
+  vllm::multimodal::MultiModalFeatureSpec item; item.modality="audio";
+  item.audio_data=std::make_shared<vllm::multimodal::AudioKwargs>(processor.ProcessWaveform(waveform.data(),800,16000));
+  // Five padded frames but four valid: token count must NOT round padded frames.
+  REQUIRE(item.audio_data->n_frames==5); REQUIRE(item.audio_data->num_tokens==1);
+  CHECK(item.audio_data->feature_mask==std::vector<int32_t>{1,1,1,1,0});
+  item.length=1; vt::Queue q{};
+  const auto out=vllm::ModelRegistry::EncodeMm(model,c,q,item);
+  REQUIRE(out.embeds.shape[0]==1); REQUIRE(out.embeds.shape[1]==2);
+  CHECK(out.embeds.Ptr<float>()[0]==doctest::Approx(1/std::sqrt(11.0001)));
+  CHECK(out.embeds.Ptr<float>()[1]==doctest::Approx(5/std::sqrt(11.0001)));
+  item.length=2; CHECK_THROWS_WITH(vllm::ModelRegistry::EncodeMm(model,c,q,item),doctest::Contains("placeholder length"));
+  item.length=0;
+  *item.audio_data=processor.ProcessWaveform(waveform.data(),160,16000);
+  CHECK_THROWS_WITH(vllm::ModelRegistry::EncodeMm(model,c,q,item),doctest::Contains("no valid frames"));
+  CHECK_FALSE(vllm::ModelRegistry::SupportsMmInputs(model));
 }

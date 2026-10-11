@@ -1178,6 +1178,7 @@ add_library(vllm STATIC
   src/vllm/multimodal/processing/context.cpp
   src/vllm/multimodal/processing/processor.cpp
   src/vllm/multimodal/dots3_note_processor.cpp
+  src/vllm/multimodal/gemma4_audio_processor.cpp
   src/vllm/multimodal/mel_filter_bank.cpp
   # Pillow's BICUBIC resampler, which is NOT torchvision's and NOT a four-tap
   # cubic (dots3-note W6c, #2537).
