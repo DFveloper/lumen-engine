@@ -130,7 +130,8 @@ std::vector<float> Conv2dK3S2P1(const std::vector<float>& x, int64_t in_ch, int6
 std::vector<float> Gemma4AudioForward(const std::vector<float>& input_features, int64_t T,
                                       const std::vector<int32_t>& feature_mask,
                                       const Gemma4AudioWeights& w, const Gemma4AudioConfig& cfg,
-                                      Gemma4AudioCapture* cap) {
+                                      Gemma4AudioCapture* cap,
+                                      const std::vector<float>* embed_projection) {
   const int64_t H = cfg.hidden_size;
   const int64_t nh = cfg.num_heads;
   const int64_t hd = cfg.head_dim;
@@ -410,7 +411,7 @@ std::vector<float> Gemma4AudioForward(const std::vector<float>& input_features, 
   std::vector<float> normed = out_proj;
   RmsNorm(normed, S, cfg.output_proj_dims, nullptr, eps);
   std::vector<float> projected =
-      Linear(normed, S, cfg.output_proj_dims, w.embed_proj, cfg.text_hidden_size, nullptr);
+      Linear(normed, S, cfg.output_proj_dims, embed_projection ? *embed_projection : w.embed_proj, cfg.text_hidden_size, nullptr);
   return projected;
 }
 

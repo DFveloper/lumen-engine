@@ -4756,6 +4756,11 @@ target_include_directories(test_qwen38_27b_radixark_w4a4_notice PRIVATE
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   add_executable(test_gemma4_e4b_loader
     vllm/models/test_gemma4_e4b_loader.cpp
+    ../src/vllm/model_executor/models/gemma4_audio_encoder.cpp
+    ../src/vllm/model_executor/models/gemma4_audio.cpp
+    ../src/vllm/model_executor/models/model_registry.cpp
+    ../src/vt/tensor.cpp
+    ../src/vt/backend.cpp
     ../src/vllm/model_executor/models/gemma4_weights.cpp
     ../src/vllm/model_executor/models/qwen3_5_weights.cpp
     ../src/vllm/model_executor/model_loader/safetensors_reader.cpp
@@ -4779,5 +4784,5 @@ target_compile_definitions(test_gemma4_e4b_loader PRIVATE
   E4B_CONFIG_PATH="${CMAKE_SOURCE_DIR}/tests/fixtures/gemma4_e4b_google/config.json")
 # Do not accept an empty executable or skipped cases as this synthetic gate.
 set_tests_properties(test_gemma4_e4b_loader PROPERTIES
-  PASS_REGULAR_EXPRESSION "test cases: +41 [|] +41 passed [|] +0 failed [|] +0 skipped"
+  PASS_REGULAR_EXPRESSION "test cases: +43 [|] +43 passed [|] +0 failed [|] +0 skipped"
   FAIL_REGULAR_EXPRESSION "Status: FAILURE")

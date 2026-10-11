@@ -136,6 +136,8 @@ struct Gemma4AudioCapture {
   std::vector<float> output_proj;         // [S, output_proj_dims]
 };
 
+// Optional embed_projection borrows the separately loaded connector without
+// copying the full tower; null uses w.embed_proj for existing callers.
 // Runs the USM-Conformer audio tower + audio projector on one clip.
 //   input_features : [T, feature_size] host f32 (log-mel; A1's product)
 //   feature_mask   : [T] host i32 (1=valid, 0=padding) — may be empty (all valid)
@@ -144,6 +146,7 @@ struct Gemma4AudioCapture {
 std::vector<float> Gemma4AudioForward(const std::vector<float>& input_features, int64_t n_frames,
                                       const std::vector<int32_t>& feature_mask,
                                       const Gemma4AudioWeights& w, const Gemma4AudioConfig& cfg,
-                                      Gemma4AudioCapture* capture = nullptr);
+                                      Gemma4AudioCapture* capture = nullptr,
+                                      const std::vector<float>* embed_projection = nullptr);
 
 }  // namespace vllm::multimodal

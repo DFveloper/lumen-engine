@@ -693,3 +693,43 @@ outputs, padding equivalence, and deletion kills. Build only real required TUs
 in the existing minimal CPU target; record actual commands, regression counts,
 header checks and mutations in assets/work/2026-10-10-e4b-encoder-integration.
 Full preflight remains pending and is prohibited for this bounded task.
+
+### Encoder execution verification
+
+Spec 7831faccd preceded code. The production factory now copies its MM hooks
+from constant-initialized kGemma4MmHooks, whose audio hook calls the existing
+Gemma4AudioForward with the loaded tower and separately widened connector.
+Gemma4LoadedModel moved unchanged in ownership semantics to gemma4_loaded.h;
+BorrowedWeightsTag is forward-declared, used by reference, and remains defined
+only in qwen3_5_common.h. No test stubs or alternate encoder were linked.
+
+Linked intentional red: 42 cases, original 41 passing, execution case throws
+"not implemented". Earlier missing-tag / NextQueueId build errors were setup
+failures, not runtime red. Final exact-count CTest: 43 cases / 6903 assertions,
+zero skips (the original 41 / 6866 included). The two new cases dispatch through
+ModelRegistry::EncodeMm using the actual production MM hook table and real
+loaded models from both loader variants. One fixture independently checks
+[1,2,3,4,5] bias, RMS mean-square 11 and two connector selectors. A sparse
+center-tap fixture checks sign-dependent frontend output against sqrt(5),
+layout sensitivity, padding removal and changed features. These do not prove
+full Conformer numeric parity. Invalid masks/shapes/chunks/lengths/modalities,
+nonfinite input, non-CPU queues and unsupported loaded attention configs fail.
+
+Four scratch-only compiled and linked mutations are killed: remove production
+MM hook, corrupt mel layout, remove connector RMSNorm, zero frontend output.
+The production registry TU passes actual-flag syntax checking, but its entire
+text factory and decoder are NOT linked into the bounded test. Thus the proof
+boundary is the production hook table plus shared registry dispatch, not
+RegistrationFor resolution, engine admission or decoder execution. embed_mm
+stays null and SupportsMmInputs remains false; this is a necessary executable
+encoder dependency, not a served multimodal capability.
+
+Only the minimal loader target was built with -j2, adding real encoder, audio,
+registry, tensor and backend TUs with section collection. Eleven actual-command
+header consumers, 28 metadata tests, offline metadata CLI, records, anchors and
+whitespace pass. Scratch is under 1 MiB; reused build is 71 MiB, free disk above
+13 GiB. Evidence and reproducible commands are in
+assets/work/2026-10-10-e4b-encoder-integration. Full preflight remains pending
+and was not run. T03-T06, merge hook, production BF16, T01B and original-model
+runtime acceptance remain pending. This slice awaits root verification and
+fresh independent review; previous retention review is not reused as its review.

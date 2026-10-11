@@ -1067,3 +1067,120 @@ TEST_CASE("E4B audio blocks: source layer and head defaults with twelve tiny blo
   }
  }
 }
+
+#include "vllm/model_executor/models/gemma4_loaded.h"
+TEST_CASE("E4B execution: shared registry dispatch reaches loaded audio and projector") {
+  Fixture f; auto c = audio_config(); add_audio(f,4,4,2); f.add(audio_proj,{2,5});
+  // Independent scalar fixture: zero output matrix, bias [1,2,3,4,5].
+  // Connector rows select first and last normalized bias components.
+  auto set = [&](const std::string& name, const std::vector<float>& values) {
+    const size_t start=f.header[name]["data_offsets"][0].get<size_t>();
+    for(size_t i=0;i<values.size();++i) {
+      auto bits=vt::F32ToBF16(values[i]); std::memcpy(f.bytes.data()+start+2*i,&bits,2);
+    }
+  };
+  set("model.audio_tower.output_proj.weight",std::vector<float>(20,0));
+  set("model.audio_tower.output_proj.bias",{1,2,3,4,5});
+  set(audio_proj,{1,0,0,0,0, 0,0,0,0,1});
+  auto shards=f.open(); auto weights=vllm::LoadGemma4ForConditionalGenerationWeights(shards,c);
+  const auto& factory=vllm::kGemma4MmHooks;
+  const vllm::ModelRegistration registration{"Gemma4ForConditionalGeneration",&factory,{}};
+  vllm::Gemma4LoadedModel model(registration,std::move(weights));
+  CHECK_FALSE(vllm::ModelRegistry::SupportsMmInputs(model));
+  vt::Queue queue{};
+  vllm::multimodal::MultiModalFeatureSpec item;
+  item.modality="audio"; item.length=2;
+  item.audio_data=std::make_shared<vllm::multimodal::AudioKwargs>();
+  auto& a=*item.audio_data; a.n_mels=4; a.n_frames=8;
+  a.input_features.resize(32); for(size_t i=0;i<32;++i)a.input_features[i]=float(i)/32;
+  a.feature_mask={1,1,1,1,1,0,0,0};
+  auto out=vllm::ModelRegistry::EncodeMm(model,c,queue,item);
+  REQUIRE(out.storage); REQUIRE(out.embeds.shape[0]==2); REQUIRE(out.embeds.shape[1]==2);
+  REQUIRE(out.embeds.dtype==vt::DType::kF32);
+  const float scale=1/std::sqrt(11.0f+0.0001f);
+  for(int i=0;i<2;++i) {
+    CHECK(out.embeds.Ptr<float>()[2*i]==doctest::Approx(scale));
+    CHECK(out.embeds.Ptr<float>()[2*i+1]==doctest::Approx(5*scale));
+  }
+  auto reject=[&](const char* message){CHECK_THROWS_WITH(vllm::ModelRegistry::EncodeMm(model,c,queue,item),doctest::Contains(message));};
+  a.feature_mask={1}; reject("mask");
+  a.feature_mask={1,0,1,1,1,0,0,0}; reject("prefix");
+  a.feature_mask={1,1,2,1,1,0,0,0}; reject("mask");
+  a.feature_mask=std::vector<int32_t>(8,0); reject("valid");
+  a.feature_mask.clear(); item.length=1; reject("length"); item.length=2;
+  a.num_chunks=2; reject("chunk"); a.num_chunks=1;
+  a.input_features.pop_back(); reject("shape"); a.input_features.push_back(0);
+  item.modality="image"; reject("audio"); item.modality="audio";
+  queue.device.type=vt::DeviceType::kCUDA; reject("CPU");
+  queue.device.type=vt::DeviceType::kCPU;
+  a.n_frames=INT64_MAX; reject("shape"); a.n_frames=8;
+  a.n_mels=5; a.input_features.resize(40); reject("width");
+  a.n_mels=4; a.input_features.resize(32);
+  a.input_features[0]=std::numeric_limits<float>::quiet_NaN(); reject("nonfinite");
+  a.input_features[0]=0;
+  a.num_tokens=1; reject("length"); a.num_tokens=0;
+  // Loaded configurations which the reference cannot faithfully execute.
+  for (const auto& [key,value] : std::vector<std::pair<std::string,int>>{
+      {"attention_context_right",1},{"attention_context_left",1},{"num_attention_heads",3}}) {
+    auto badc=c; badc.raw["audio_config"][key]=value;
+    Fixture bad; add_audio(bad,4,4,2); bad.add(audio_proj,{2,5});
+    if(key=="num_attention_heads") add_blocks(bad,4,2,3);
+    auto bs=bad.open(); auto bw=vllm::LoadGemma4ForConditionalGenerationWeights(bs,badc);
+    vllm::Gemma4LoadedModel bm(registration,std::move(bw));
+    CHECK_THROWS_WITH(vllm::ModelRegistry::EncodeMm(bm,badc,queue,item),doctest::Contains("config"));
+  }
+  // Output owns its storage independently of the model/fixture.
+  auto saved=out.storage; CHECK(out.embeds.Ptr<float>()[0]==doctest::Approx(scale));
+}
+
+TEST_CASE("E4B execution: real tower responds to features and strips trailing padding") {
+  Fixture f; auto c=audio_config(); add_audio(f,4,4,2); f.add(audio_proj,{2,5});
+  c.raw["audio_config"]["use_clipped_linears"]=false;
+  auto put=[&](const std::string& name, std::vector<float> values) {
+    auto offset=f.header[name]["data_offsets"][0].get<size_t>();
+    for(float x:values) {auto bits=vt::F32ToBF16(x); std::memcpy(f.bytes.data()+offset,&bits,2);offset+=2;}
+  };
+  // Sparse center taps preserve a sign-dependent channel direction through
+  // both real subsampling convolutions; zero blocks leave only their norms.
+  std::vector<float> conv0(36,0); conv0[4]=1; conv0[13]=-1;
+  put(audio_prefix+"layer0.conv.weight",conv0);
+  std::vector<float> conv1(72,0);conv1[4]=1;conv1[36+13]=1;
+  put(audio_prefix+"layer1.conv.weight",conv1);
+  put(audio_prefix+"input_proj_linear.weight",{1,0,0,1,0,0,0,0});
+  for(int l=0;l<2;++l) for(const auto& e:ai(4,2)) {
+    size_t n=1; for(auto d:e.shape)n*=d;
+    const bool norm=std::string(e.name).find("norm")!=std::string::npos;
+    put("model.audio_tower.layers."+std::to_string(l)+"."+e.name,std::vector<float>(n,norm?1:0));
+  }
+  put("model.audio_tower.output_proj.weight",{1,0,0,0, 0,1,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0});
+  put("model.audio_tower.output_proj.bias",std::vector<float>(5,0));
+  put(audio_proj,{1,0,0,0,0, 0,1,0,0,0});
+  auto shards=std::make_shared<const std::vector<vllm::SafetensorsFile>>(f.open());
+  auto w=vllm::LoadGemma4ForConditionalGenerationWeightsOwned(shards,c);
+  const vllm::ModelRegistration registration{"Gemma4ForConditionalGeneration",&vllm::kGemma4MmHooks,{}};
+  vllm::Gemma4LoadedModel model(registration,std::move(w)); shards.reset();
+  vt::Queue q{}; vllm::multimodal::MultiModalFeatureSpec item;
+  item.modality="audio";item.length=2;item.audio_data=std::make_shared<vllm::multimodal::AudioKwargs>();
+  auto& a=*item.audio_data;a.n_frames=8;a.n_mels=4;a.feature_mask={1,1,1,1,1,0,0,0};
+  a.input_features=std::vector<float>(32,1);
+  // Mel zero at the first output sample is negative, while flat row-major
+  // reinterpretation would sample positive data for the second output.
+  a.input_features[0]=-1;a.input_features[4]=-1;
+  auto out=vllm::ModelRegistry::EncodeMm(model,c,q,item);
+  CHECK(out.embeds.Ptr<float>()[0]==doctest::Approx(0));
+  CHECK(out.embeds.Ptr<float>()[1]>2.2f);
+  CHECK(out.embeds.Ptr<float>()[2]==doctest::Approx(0));
+  CHECK(out.embeds.Ptr<float>()[3]>2.2f);
+  // Independent scalar: input [0,v,0,0], two RMS norms, output selects it,
+  // then weightless RMS over five channels -> sqrt(5) to within eps effects.
+  CHECK(out.embeds.Ptr<float>()[1]==doctest::Approx(std::sqrt(5.0f)).epsilon(0.001));
+  const auto padded=a.input_features;
+  a.input_features.clear();for(int m=0;m<4;++m)for(int t=0;t<5;++t)a.input_features.push_back(padded[m*8+t]);
+  a.n_frames=5;a.feature_mask.clear();
+  auto trimmed=vllm::ModelRegistry::EncodeMm(model,c,q,item);
+  for(int i=0;i<4;++i) CHECK(trimmed.embeds.Ptr<float>()[i]==out.embeds.Ptr<float>()[i]);
+  a.input_features[0]=1;a.input_features[4]=1;
+  auto changed=vllm::ModelRegistry::EncodeMm(model,c,q,item);
+  CHECK(changed.embeds.Ptr<float>()[0]>2.2f);
+  CHECK(changed.embeds.Ptr<float>()[1]==doctest::Approx(0));
+}
