@@ -1241,3 +1241,24 @@ Evidence/reproduction: assets/work/2026-10-10-e4b-vision-execution/README.md.
 Full preflight prohibited/PENDING. No GPU, original weights, install, remote,
 push/PR/merge. Full factory, runtime, T03 and video remain pending. This proves
 production hook-table dispatch, not public-factory or served reachability.
+
+### T04C review coverage repair (prospective)
+
+ISSUE-LOCAL-01M4N83NGMK17ZZ608E631NX2R tracks two surviving mutations,
+not known production bugs. Add a separate independent Torch CPU equation
+fixture at width12, three MHA heads of dimension4, with sqrt(12) scaling.
+Use nonzero dyadic patch/position inputs and isolate pooling by zeroing the
+attention/MLP residual output projections. Compare encoder and pooled BF16
+values exactly, without the broad full-block tolerance. Retain source-rounded
+and deliberately late-rounded oracle outputs and assert they differ.
+No original-shape, general-theta or full-HF claim follows from this fixture.
+
+Add under/oversized storage cases for each Q/K/V/O, MLP, norm, patch,
+position and connector field and block count. Check raw registry connector
+rank, dtype, dimensions and short/excess bytes. Compile/link scratch-only
+pool-no-round and >= attention-size mutations with the real CPU providers;
+require runtime assertion failures, then rerun the unmodified four targets
+and metadata tests. Production behavior and admission flags stay unchanged.
+Reuse the existing build, -j2 and external TMPDIR/Git ceiling. Keep total
+incremental storage below256MiB and stop below4GiB free. Full preflight is
+prohibited/PENDING; no network, installation, GPU, weights or remote writes.
