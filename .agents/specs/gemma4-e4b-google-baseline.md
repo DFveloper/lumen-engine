@@ -887,3 +887,35 @@ and over-cap refusal are explicit bounded API choices, not upstream parity.
 
 Await root verification and fresh review. No capability, T03/T04/T06, runtime,
 production-BF16, full-registry or full-preflight gate was promoted.
+
+### T05A prospective process correction (2026-10-11)
+
+Independent review found technical PASS but process FAIL at 23c1b906:
+required preimplementation RED was not captured. That historical gap remains
+FAIL, not waived. Neither review mutations nor this correction retroactively
+satisfy it. Original spec and implementation commits remain unchanged.
+ISSUE-LOCAL-01M4KSETGY63TDEDPF6EHQHRA8 stays OPEN; independent review and root
+policy disposition are required before acceptance.
+
+The fresh corrective implementer verified HEAD is exactly 23c1b906 and no
+tracked changes exist. The prospective sequence is: commit this plan, roll
+back only T05A production behavior, retain pinned tests/fixtures, capture
+buildable RED, commit the rejection state, then implement the same complete
+source contract and capture GREEN. Retain processor declarations and CMake
+plumbing so tests link. Replace processor and shared FFT behavior with explicit
+unavailable exceptions; restore private w2v FFT and pre-T05A mel construction.
+The rejection state is temporary remediation, not accepted runtime behavior.
+Valid-waveform and valid-FFT tests must fail at those explicit refusals, not
+at compiler/linker errors. No test, fixture, expected value or tolerance changes
+are permitted. Restoration may reuse reviewed arithmetic; it is not a claim
+of independent rediscovery or a replacement for historical RED.
+
+Evidence: assets/work/2026-10-10-e4b-audio-correction. Use only named CPU gates,
+-j2 maximum, external TMPDIR/Git ceiling, under 256 MiB incremental scratch and
+stop below 4 GiB free. Run both frontend/loader gates, metadata 28, w2v goldens,
+actual-command header checks and focused records/style/trailers. Full preflight
+is explicitly prohibited and remains PENDING, as do the original oracle,
+served capability and T03/T04/T06. No GPU, weights, installation or remote
+operation. Existing untracked plans remain untouched. This is a new corrective
+chronology only; status remains awaiting independent review, process gap NOT
+waived.
