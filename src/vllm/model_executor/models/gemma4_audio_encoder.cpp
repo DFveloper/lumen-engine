@@ -5,7 +5,51 @@
 #include <cstring>
 
 namespace vllm {
-constinit const ModelFactory kGemma4MmHooks{.encode_mm = &EncodeMmGemma4Audio,
+namespace {
+MmEncoderOutput EncodeMmGemma4(LoadedModel& model, const HfConfig& config,
+    vt::Queue& queue, const multimodal::MultiModalFeatureSpec& item) {
+  if (item.modality == "audio") return EncodeMmGemma4Audio(model, config, queue, item);
+  VT_CHECK(queue.device.type == vt::DeviceType::kCPU, "gemma4 vision: CPU reference only");
+  VT_CHECK(item.modality == "image" && item.data && !item.audio_data,
+           "gemma4 encoder: image or audio required");
+  const auto& w = ModelAs<Gemma4LoadedModel>(model, "Gemma4ForConditionalGeneration").weights();
+  VT_CHECK(w.vision_config, "gemma4 vision: tower absent");
+  const auto& cfg = *w.vision_config;
+  const auto& a = *item.data;
+  const auto& grid = a.image_grid_thw;
+  VT_CHECK(cfg.patch_size == 16 && cfg.pooling_kernel_size == 3 &&
+               cfg.text_hidden_size == config.hidden_size, "gemma4 vision: processor config");
+  VT_CHECK(a.num_patches > 0 && a.num_patches <= 10080 &&
+               a.patch_feature_dim == 768 && a.pixel_values_bf16.empty() &&
+               grid[0] == 1 && grid[1] > 0 && grid[2] > 0 &&
+               grid[1] <= a.num_patches / grid[2] && grid[1] % 3 == 0 && grid[2] % 3 == 0,
+           "gemma4 vision: image metadata");
+  const int64_t valid = grid[1] * grid[2], rows = valid / 9;
+  VT_CHECK(item.length == rows, "gemma4 vision: placeholder length");
+  std::vector<int64_t> positions(static_cast<size_t>(a.num_patches) * 2, -1);
+  for (int64_t row = 0; row < valid; ++row) {
+    positions[row * 2] = row % grid[2]; positions[row * 2 + 1] = row / grid[2];
+  }
+  const auto& p = w.vision.embedding_projection;
+  VT_CHECK(p.dtype == vt::DType::kBF16 && p.rank == 2 &&
+               p.shape[0] == cfg.text_hidden_size && p.shape[1] == cfg.hidden_size &&
+               cfg.hidden_size > 0 && cfg.text_hidden_size > 0 &&
+               cfg.text_hidden_size <= INT64_MAX / 2 / cfg.hidden_size &&
+               p.bytes.size() == static_cast<size_t>(cfg.text_hidden_size * cfg.hidden_size) * 2,
+           "gemma4 vision: BF16 connector shape");
+  auto vision = w.vision_patch_weights;
+  vision.embed_projection.resize(p.bytes.size() / 2);
+  std::memcpy(vision.embed_projection.data(), p.bytes.data(), p.bytes.size());
+  auto values = std::make_shared<std::vector<float>>(multimodal::Gemma4VisionForward(
+      a.pixel_values_f32, positions, a.num_patches, vision, cfg,
+      vt::GetBackend(vt::DeviceType::kCPU)));
+  VT_CHECK(values->size() == static_cast<size_t>(rows * cfg.text_hidden_size),
+           "gemma4 vision: encoder output shape");
+  return {values, vt::Tensor::Contiguous(values->data(), vt::DType::kF32,
+                                        queue.device, {rows, cfg.text_hidden_size})};
+}
+}  // namespace
+constinit const ModelFactory kGemma4MmHooks{.encode_mm = &EncodeMmGemma4,
     .embed_mm = &EmbedMmGemma4, .mm_inputs_ready = false};
 MmForwardBuffers EmbedMmGemma4(LoadedModel& model, const HfConfig& config,
     vt::Queue& queue, const MmEmbedInputs& in) {

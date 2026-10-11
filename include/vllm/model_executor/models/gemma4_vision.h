@@ -91,7 +91,7 @@ struct Gemma4VisionBlockWeights {
   std::vector<uint16_t> q_norm, k_norm;                  // [head_dim]
   std::vector<uint16_t> gate_proj, up_proj;              // [I,H]
   std::vector<uint16_t> down_proj;                       // [H,I]
-  // QAT clamps (q/k/v share in-clamp; gate/up share in- AND out-clamp).
+  // Independent QAT bounds per source ClippableLinear; equality is not required.
   Clip q_clip, k_clip, v_clip, o_clip, gate_clip, up_clip, down_clip;
 };
 
@@ -111,6 +111,8 @@ struct Gemma4VisionWeights {
 // Per-stage captures for the G2-impl unit gates (all host f32, valid rows only).
 struct Gemma4VisionCapture {
   std::vector<float> patch_embed_out;  // [n_valid, H]
+  std::vector<float> attention_out;  // last block, pre-o-projection [n_valid,H]
+  std::vector<float> mlp_out;        // last block, post-norm [n_valid,H]
   std::vector<float> encoder_out;      // [n_valid, H]
   std::vector<float> pooled;           // [n_soft, H]  (post sqrt(hidden) fp32, bf16-rounded)
   std::vector<float> projected;        // [n_soft, text_hidden]

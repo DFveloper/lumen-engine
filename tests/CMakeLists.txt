@@ -4816,3 +4816,43 @@ target_compile_definitions(test_gemma4_e4b_image_processor PRIVATE
 set_tests_properties(test_gemma4_e4b_image_processor PROPERTIES
   PASS_REGULAR_EXPRESSION "test cases: +4 [|] +4 passed [|] +0 failed [|] +0 skipped"
   FAIL_REGULAR_EXPRESSION "Status: FAILURE")
+
+# T04C: actual CPU provider closure, not the whole model/backend archive.
+get_target_property(E4B_LOADER_SOURCES test_gemma4_e4b_loader SOURCES)
+list(REMOVE_ITEM E4B_LOADER_SOURCES vllm/models/test_gemma4_e4b_loader.cpp)
+add_executable(test_gemma4_e4b_vision_execution
+  vllm/models/test_gemma4_e4b_vision_execution.cpp
+  ${E4B_LOADER_SOURCES}
+  ../src/vllm/multimodal/gemma4_image_processor.cpp
+  ../src/vllm/model_executor/models/gemma4_vision.cpp
+  ../src/vllm/model_executor/models/gemma4_vision_input.cpp
+  ../src/vt/ops.cpp ../src/vt/op_provider.cpp
+  ../src/vt/cpu/cpu_backend.cpp ../src/vt/cpu/cpu_ops.cpp
+  ../src/vt/cpu/cpu_threadpool.cpp ../src/vt/cpu/cpu_matmul_elem.cpp
+  ../src/vt/cpu/cpu_isa_x86.cpp ../src/vt/cpu/cpu_isa_arm.cpp
+  ../src/vt/cpu/cpu_quant_dequant.cpp ../src/vt/cpu/cpu_layernorm.cpp)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+  target_sources(test_gemma4_e4b_vision_execution PRIVATE
+    ../src/vt/cpu/cpu_matmul_elem_f16c.cpp
+    ../src/vt/cpu/cpu_matmul_elem_avx2.cpp
+    ../src/vt/cpu/cpu_matmul_elem_avx512.cpp)
+  set_source_files_properties(../src/vt/cpu/cpu_matmul_elem_f16c.cpp PROPERTIES COMPILE_OPTIONS "-mf16c")
+  set_source_files_properties(../src/vt/cpu/cpu_matmul_elem_avx2.cpp PROPERTIES COMPILE_OPTIONS "-mavx2;-mf16c")
+  set_source_files_properties(../src/vt/cpu/cpu_matmul_elem_avx512.cpp PROPERTIES COMPILE_OPTIONS "-mavx512f;-mavx512bw;-mavx512vl;-mf16c")
+endif()
+target_include_directories(test_gemma4_e4b_vision_execution PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_gemma4_e4b_vision_execution PRIVATE vllm_test_main)
+target_compile_options(test_gemma4_e4b_vision_execution PRIVATE -ffunction-sections -fdata-sections)
+target_link_options(test_gemma4_e4b_vision_execution PRIVATE -Wl,--gc-sections)
+target_compile_definitions(test_gemma4_e4b_vision_execution PRIVATE
+  E4B_VISION_FIXTURES="${CMAKE_SOURCE_DIR}/tests/fixtures/gemma4_e4b_vision")
+vllm_cpp_set_warnings(test_gemma4_e4b_vision_execution)
+add_test(NAME test_gemma4_e4b_vision_execution COMMAND test_gemma4_e4b_vision_execution)
+set_tests_properties(test_gemma4_e4b_vision_execution PROPERTIES
+  PASS_REGULAR_EXPRESSION "test cases: +2 [|] +2 passed [|] +0 failed [|] +0 skipped"
+  FAIL_REGULAR_EXPRESSION "Status: FAILURE")
+get_target_property(E4B_EXEC_SOURCES test_gemma4_e4b_vision_execution SOURCES)
+list(REMOVE_ITEM E4B_EXEC_SOURCES vllm/models/test_gemma4_e4b_vision_execution.cpp)
+get_target_property(E4B_EXISTING_SOURCES test_gemma4_e4b_loader SOURCES)
+list(REMOVE_ITEM E4B_EXEC_SOURCES ${E4B_EXISTING_SOURCES})
+target_sources(test_gemma4_e4b_loader PRIVATE ${E4B_EXEC_SOURCES})

@@ -1206,3 +1206,38 @@ external TMPDIR/Git ceiling, 256 MiB incremental limit, stop below 4 GiB free.
 No GPU, weights, installation, full preflight, remote, push/PR/merge or cleanup
 of other work. Full preflight remains prohibited/PENDING. T03, video and full
 runtime remain pending. Hand the runnable commit SHA to root for fresh review.
+
+### T04C implementation evidence — awaiting root and independent review
+
+Spec 11bfd142a preceded behavior. Real CPU closure was measured rather than
+stubbed: backend, op registry/wrappers, CPU ops/threadpool, element GEMM and its
+ISA tiers, quant-dequant (retained registrar dependency), and layernorm/Add.
+Initial closure linked after the three x86 tier TUs were added; missing Add
+provider was corrected by linking its real layernorm TU. Neither setup failure
+is counted as numeric RED. red2.log then shows 0/2 cases: five assertions pass,
+three fail (encoder .390625, pool .226562, connector .00976562 max errors), plus
+actual shared registry audio-only rejection. Independent nonzero Torch BF16
+fixtures and tolerances existed before production correction.
+
+Production shared hook dispatch now accepts image metadata and loaded vision
+weights, calls the actual CPU backend/tower and raw BF16 connector, then existing
+merge/PLE. Each Q/K/V and gate/up projection receives its own clipping bounds.
+Pool now rounds the average to BF16 before float32 scaling, as source does.
+Execution rejects GQA/head-width mismatch and malformed metadata/weights;
+loader inventory remains broader. Queue destruction is exception-safe.
+No readiness gate was enabled; audio and text regression behavior is retained.
+
+GREEN: vision 2 cases/661 assertions; loader 46/7196; audio 5/5225; image
+4/201, zero skips. Metadata 28 and offline metadata-only CLI pass. Four
+scratch-only compiled/linked mutations are killed: shared K clipping, shared
+up clipping, missing positions and bypassed connector norm. Seven direct
+header consumers compile with actual target flags. New stage captures cover
+attention and MLP separately. Fixture README records source SHA, generator,
+Torch revision, reduced-shape qualification and non-exact BF16 tolerances.
+
+Scratch 22 MiB; reused build 105 MiB versus initial74 MiB, comfortably below
+256 MiB incremental. CPU -j2, external TMPDIR/Git ceiling, 13 GiB free.
+Evidence/reproduction: assets/work/2026-10-10-e4b-vision-execution/README.md.
+Full preflight prohibited/PENDING. No GPU, original weights, install, remote,
+push/PR/merge. Full factory, runtime, T03 and video remain pending. This proves
+production hook-table dispatch, not public-factory or served reachability.
