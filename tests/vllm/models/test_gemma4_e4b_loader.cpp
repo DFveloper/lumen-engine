@@ -749,8 +749,20 @@ TEST_CASE("E4B audio frontend: missing malformed and wrong dtype inventory") {
     if(bad==0) f.header.erase(name);
     if(bad==1) { auto shape=e.shape; shape.push_back(1); f.header[name]["shape"]=shape; }
     if(bad==2) f.header[name]["dtype"]="F16";
-    reject_mm(f,audio_config(),bad==2 ? "BF16" : name);
+    reject_mm(f,audio_config(),bad==2 ? "gemma4: " + name + " requires BF16" : name);
   }
+}
+TEST_CASE("E4B audio frontend: valid scaled FP8 input projection requires BF16") {
+  Fixture f; add_audio(f,4,4,2); f.add(audio_proj,{2,5});
+  const std::string name = audio_prefix + "input_proj_linear.weight";
+  const size_t start = f.bytes.size();
+  f.bytes.append(8, '\x38'); // Eight E4M3 1.0 values, [out,in] = [4,2].
+  f.header[name] = {{"dtype", "F8_E4M3"}, {"shape", {4,2}},
+                    {"data_offsets", {start, start+8}}};
+  f.add(name + "_scale", {1}); // Valid per-tensor BF16 1.0 scale.
+  // The shared materializer accepts this encoding for vision. Only the
+  // frontend-specific guard may reject it, before that materializer runs.
+  reject_mm(f,audio_config(),"gemma4: " + name + " requires BF16");
 }
 TEST_CASE("E4B audio frontend: config and precise overflow refusals") {
   for (const auto* key : {"hidden_size", "rms_norm_eps"}) {
