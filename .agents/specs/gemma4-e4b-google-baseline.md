@@ -1169,3 +1169,40 @@ accumulator row rather than input-height*output-width temporary; existing
 O(input axes + output axes); output <=31MiB patches plus <=8MiB resized bytes.
 Evidence: assets/work/2026-10-10-e4b-image-resize. Full preflight prohibited and
 pending. Full HF processor, numerical vision and serving remain pending.
+
+### T04C CPU vision execution (prospective)
+
+T04B is reviewed per parent rootbg378/review472eff: image 4/201,
+36 independent CPU oracle cases (byte exact) and 13 mutation kills; loader
+46/7196, audio 5/5225 and metadata 28. This does not establish vision execution.
+
+Wire decoded RGB processor output through the production shared encode_mm hook,
+loaded vision blocks and raw BF16 [out,in] connector into Gemma4VisionForward,
+then the existing embedding/PLE merge. Use the actual CPU backend and op
+providers, not link stubs or a parallel test runner. First determine the exact
+bounded translation-unit closure; stop with measured evidence if the 256 MiB
+incremental scratch limit cannot accommodate it. No full-library build.
+Default original E4B config is MHA (12 heads, 12 KV heads, width 768,
+head_dim 64). Reject GQA or incompatible execution configurations before
+allocation, while retaining the broader loader inventory contract.
+
+Pinned Transformers modeling source retained in the earlier vision scratch
+owns pixel scaling, axis positions, sandwich RMSNorm, per-projection clipping,
+2D RoPE, noncausal scale-1 attention, tanh GeGLU, spatial pooling and weightless
+connector normalization. Do not assume Q/K/V or gate/up clipping bounds match.
+Use independently generated nonzero small Torch CPU source/equation fixtures
+for intermediate and final values. Explicitly qualify reduced-size BF16 CPU
+fixtures: they are not original-checkpoint or full HF runtime acceptance.
+
+Commit this spec before a genuine behavioral RED through shared registry encode
+and loaded weights. Then correct production behavior and prove GREEN including
+image metadata and PLE merge, malformed inputs, unsupported modality/device and
+configuration refusals. Preserve SupportsMmInputs=false, audio behavior and
+CUDA/video refusal. Public factory/full runtime reachability remains unproven.
+Run the three existing targets, metadata 28, actual-header-flags consumers,
+record/anchor/style/trailer checks, and the new exact-count CPU target -j2.
+External scratch assets/work/2026-10-10-e4b-vision-execution owns logs and README;
+external TMPDIR/Git ceiling, 256 MiB incremental limit, stop below 4 GiB free.
+No GPU, weights, installation, full preflight, remote, push/PR/merge or cleanup
+of other work. Full preflight remains prohibited/PENDING. T03, video and full
+runtime remain pending. Hand the runnable commit SHA to root for fresh review.
