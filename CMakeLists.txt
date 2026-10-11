@@ -1390,6 +1390,7 @@ add_library(vllm STATIC
   src/vllm/entrypoints/openai/tool_parsers/granite.cpp
   src/vllm/entrypoints/openai/tool_parsers/granite4.cpp
   src/vllm/entrypoints/openai/tool_parsers/granite_20b_fc.cpp
+  src/vllm/entrypoints/openai/reasoning_parsers/request.cpp
   src/vllm/entrypoints/openai/reasoning_parsers/abstract.cpp
   src/vllm/entrypoints/openai/reasoning_parsers/detect.cpp
   src/vllm/entrypoints/openai/reasoning_parsers/think_auto.cpp

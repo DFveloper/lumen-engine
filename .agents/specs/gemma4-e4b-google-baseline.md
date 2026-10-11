@@ -1680,7 +1680,7 @@ Python truthiness: missing/null/false/numeric zero/empty string/array/object
 are false; nonzero and nonempty values are true, including string 'false'.
 No Kolibri effort rules, boolean-only extraction or new rejection policy.
 ChatCompletionRequest normalization in protocol.cpp retains only outer objects;
-leave it unchanged. Template defaults merge privately in BuildChatPromptFn's
+leave it unchanged. Template defaults merge privately in MakeChatTemplatePromptFn's
 closure; this slice reads the request, not that merged map. It makes no claim
 of equivalence to server-default template settings.
 
@@ -1714,3 +1714,35 @@ Claims are actual request-aware construction tested and serving caller wired
 and syntax-compiled, NOT end-to-end HTTP or served reasoning. Full T03B/T03/T10,
 original tokenizer/weights, full preflight and readiness remain false/pending.
 Root exact-SHA verification and separate fresh review follow the code commit.
+
+### T03C4 implementation evidence — root and fresh review pending
+
+Prospective71ef7af7b preceded inert production API and test compilation.
+Initial setup bg862 failed on a two-argument doctest CAPTURE; no RED claimed.
+Original preimplementation bg865 linked40 cases/6235 assertions:48 genuine
+kwargs failures at line42 and20 malformed-channel fixture failures at line43.
+This is mixed RED, not a clean TDD result. Production bg868 reduced failures
+to8, all from that fixture. The corrected inert replay bg870 happened after
+the implementation was saved; its48 failures are post-fix sensitivity, NOT
+prospective RED. The valid implementation was restored without resetting Git.
+Corrected green bg871 passes40/6235, no skips. Full chronology is retained.
+
+MakeRequestReasoningParser now applies Python JSON truthiness for Gemma and
+preserves other-family defaults. MakeReasoningParser(request) calls it in the
+real serving consumer. Existing factory symbols, normalization, tokenizer,
+prompt timing, HTTP loops and Gemma tool routing remain unchanged.
+The gate links27 real production providers (the accepted26 plus request.cpp),
+seven test TUs and real vllm_test_main, never libvllm or stubs.
+
+Final six CPU gates pass with exact counts and zero skips: loader46/7196,
+audio5/5225, image4/201, vision5/1172, template48/415, reasoning40/6235.
+Metadata28,29 actual-flags header consumers, records and anchors pass.
+Seven compiled scratch mutations fail: ignored kwargs48, wrong default3,
+null truthiness4, empty containers8, strings16, numeric zero12, non-Gemma131.
+Nine retained source hashes match. Final serving compilation is separately
+retained after the include-order edit; no HTTP traversal claim follows.
+Evidence: assets/work/2026-10-11-e4b-reasoning-kwargs/README.md.
+No clang-format executable was used. Full preflight prohibited/PENDING.
+Request kwargs differ from template defaults merged inside MakeChatTemplatePromptFn:
+that closure ignores null/'auto' overrides. No merged-default parity is claimed.
+Full T03B/T03/T10, original tokenizer/weights and readiness remain false/pending.

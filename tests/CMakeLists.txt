@@ -4889,6 +4889,8 @@ set_tests_properties(test_gemma4_e4b_template PROPERTIES
 
 # Bounded real-provider factory gate; no libvllm or tool-factory substitution.
 add_executable(test_gemma4_e4b_reasoning_end
+  ../src/vllm/entrypoints/openai/reasoning_parsers/request.cpp
+  vllm/parser/test_gemma4_e4b_request.cpp
   vllm/entrypoints/openai/reasoning_parsers/test_qwen3.cpp
   vllm/entrypoints/openai/reasoning_parsers/test_kolibri1.cpp
   vllm/parser/test_gemma4_e4b_adapter.cpp
@@ -4937,6 +4939,6 @@ endif()
 vllm_cpp_set_warnings(test_gemma4_e4b_reasoning_end)
 add_test(NAME test_gemma4_e4b_reasoning_end COMMAND test_gemma4_e4b_reasoning_end)
 set_tests_properties(test_gemma4_e4b_reasoning_end PROPERTIES
-  PASS_REGULAR_EXPRESSION "test cases: +37 [|] +37 passed [|] +0 failed [|] +0 skipped"
+  PASS_REGULAR_EXPRESSION "test cases: +40 [|] +40 passed [|] +0 failed [|] +0 skipped"
   FAIL_REGULAR_EXPRESSION "Status: FAILURE"
   ENVIRONMENT "VT_CPU_THREADS=1")
