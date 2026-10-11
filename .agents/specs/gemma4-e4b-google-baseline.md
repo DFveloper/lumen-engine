@@ -1262,3 +1262,27 @@ and metadata tests. Production behavior and admission flags stay unchanged.
 Reuse the existing build, -j2 and external TMPDIR/Git ceiling. Keep total
 incremental storage below256MiB and stop below4GiB free. Full preflight is
 prohibited/PENDING; no network, installation, GPU, weights or remote writes.
+
+### T04C review repair evidence — awaiting root and fresh review
+
+Spec e37dacc31 preceded the test repair. Independent width12/three-head MHA
+Torch equations distinguish pre-scale BF16 average rounding in three of24
+pooled values. Encoder and pool assertions retain zero tolerance. A fixed
++0.25 dyadic position offset removes near-zero float32 cancellation from the
+first fixture; no expected values came from C++ and no tolerance was widened.
+The fixture README records this adjustment and source provenance.
+
+Scratch-only real compiled/linked mutations now fail: pool-no-round has one
+assertion failure (max error .015625); oversized attention storage has four
+failures, one each for Q/K/V/O. Actual recompiled baseline passes5/1172.
+Short/excess storage coverage includes all tower fields and block count (34
+assertions), plus nine raw connector rank/dtype/dimension/byte failures through
+the shared registry. No production code or admission behavior changed.
+
+Final exact-count CTest4/4: vision5/1172, loader46/7196, audio5/5225,
+image4/201, zero skips; metadata28 and offline CLI pass. Records and anchors
+pass. Evidence and exact commands: assets/work/2026-10-10-e4b-vision-repair.
+Build106MiB versus initial74, execution22, review19, repair5: incremental78MiB
+of256MiB; disk13GiB free, -j2, external TMPDIR/Git ceiling. Full preflight
+prohibited/PENDING. SupportsMmInputs remains false; full factory, original
+shape/checkpoint, full HF, general theta, T03, video and runtime remain pending.

@@ -36,3 +36,28 @@ Pool matches the source cast-to-BF16 before float32 sqrt(hidden) scaling.
 Clipping, missing positions and missing connector normalization mutations fail.
 Full HF/vLLM compatibility, factory registration, device execution, original
 weights and served acceptance remain pending. SupportsMmInputs remains false.
+
+## Pool rounding discriminator
+
+Regenerate `pool_rounding.json` with
+`python3 scripts/mm/gen_gemma4_pool_rounding.py`. This separate fixture uses
+width12, three MHA heads of dimension4 and sqrt(12) scaling. It uses the same
+pinned HF source and installed Torch CPU revision recorded above. It imports
+no C++ code and consumes no C++ output. The generator implements source patch
+embedding and position pooling equations. Zero attention/MLP output weights
+isolate pooling while the real backend still executes every stage. Patch
+inputs, positions, encoder outputs and pooled outputs are nonzero.
+
+All 216 encoder and 24 pooled values use zero absolute tolerance. The stored
+`source_scaled` values retain float32 scaling before the existing BF16 capture
+boundary; `late_rounding` deliberately omits the source average cast. Three
+of 24 final scalars distinguish these equations. The compiled pool-no-round
+mutation has maximum error 0.015625. This tests rounding order, not full HF
+connector equivalence or original-shape numerics.
+
+Initial fixture development exposed a cancellation artifact: a mathematically
+zero average became -5.17e-08 in Torch's float32 one-hot matrix product, unlike
+the production double accumulator. A fixed +0.25 dyadic offset on each position
+axis avoids this near-zero cancellation. Expected values were regenerated from
+Torch equations, never copied from C++ captures; no tolerance was widened.
+The initial failed comparison is retained in repair scratch `green-first.log`.

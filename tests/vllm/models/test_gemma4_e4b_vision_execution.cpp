@@ -118,3 +118,111 @@ TEST_CASE("E4B vision: decoded RGB reaches loaded shared registry and PLE merge"
   item.modality="video";CHECK_THROWS(vllm::ModelRegistry::EncodeMm(model,c,q,item));item.modality="image";
   q.device.type=vt::DeviceType::kCUDA;CHECK_THROWS(vllm::ModelRegistry::EncodeMm(model,c,q,item));
 }
+
+TEST_CASE("E4B vision: round pooled average before non-power-of-two scale") {
+  std::ifstream f(std::string(E4B_VISION_FIXTURES)+"/pool_rounding.json");
+  const auto j=json::parse(f);
+  vllm::multimodal::Gemma4VisionConfig cfg;
+  cfg.hidden_size=12; cfg.num_heads=cfg.num_kv_heads=3; cfg.head_dim=4;
+  cfg.depth=1; cfg.intermediate_size=6; cfg.position_embedding_size=6;
+  cfg.text_hidden_size=2;
+  REQUIRE(j.at("width")==cfg.hidden_size);
+  REQUIRE(j.at("heads")==cfg.num_heads);
+  REQUIRE(j.at("head_dim")==cfg.head_dim);
+  vllm::multimodal::Gemma4VisionWeights w;
+  w.input_proj.resize(12*768);
+  for(int h=0;h<12;++h)w.input_proj[h*768+h]=vt::F32ToBF16(1);
+  w.position_embedding_table=j.at("position_table").get<std::vector<float>>();
+  w.embed_projection.assign(2*12,vt::F32ToBF16(0.125f));
+  w.blocks.resize(1);
+  auto& block=w.blocks[0];
+  for(auto* v:{&block.q_proj,&block.k_proj,&block.v_proj})
+    v->assign(12*12,vt::F32ToBF16(0.125f));
+  // Isolate pooling without bypassing any production stage or provider.
+  block.o_proj.resize(12*12);
+  for(auto* v:{&block.gate_proj,&block.up_proj})v->assign(6*12,vt::F32ToBF16(0.125f));
+  block.down_proj.resize(12*6);
+  for(auto* v:{&block.input_ln,&block.post_attn_ln,&block.pre_ff_ln,&block.post_ff_ln})
+    v->assign(12,vt::F32ToBF16(1));
+  for(auto* v:{&block.q_norm,&block.k_norm})v->assign(4,vt::F32ToBF16(1));
+  vllm::multimodal::Gemma4VisionCapture capture;
+  auto& backend=vt::GetBackend(vt::DeviceType::kCPU);
+  const auto out=vllm::multimodal::Gemma4VisionForward(
+      j.at("pixels").get<std::vector<float>>(),j.at("positions").get<std::vector<int64_t>>(),
+      18,w,cfg,backend,&capture);
+  REQUIRE(out.size()==4);
+  compare(capture.patch_embed_out,j.at("encoder"),0);
+  compare(capture.encoder_out,j.at("encoder"),0);
+  compare(capture.pooled,j.at("pooled"),0);
+  const auto expected=j.at("pooled").get<std::vector<float>>();
+  const auto late=j.at("late_rounding").get<std::vector<float>>();
+  REQUIRE(expected.size()==late.size());
+  CHECK(expected!=late);
+}
+
+TEST_CASE("E4B vision: exact storage for every tower weight") {
+  const auto j=golden(); const auto c=config(j); const auto loaded=weights(c);
+  const auto cfg=*loaded.vision_config;
+  auto w=loaded.vision_patch_weights;
+  w.embed_projection.resize(loaded.vision.embedding_projection.bytes.size()/2);
+  std::memcpy(w.embed_projection.data(),loaded.vision.embedding_projection.bytes.data(),
+              loaded.vision.embedding_projection.bytes.size());
+  const auto pixels=j.at("small").at("pixels").get<std::vector<float>>();
+  const auto pos=j.at("small").at("positions").get<std::vector<int64_t>>();
+  auto& backend=vt::GetBackend(vt::DeviceType::kCPU);
+  auto& b=w.blocks[0];
+  auto reject_sizes=[&](auto& storage,const char* message) {
+    const auto original=storage;
+    for(int delta:{-1,1}) {
+      CAPTURE(delta); CAPTURE(message);
+      storage.resize(original.size()+delta);
+      CHECK_THROWS_WITH(vllm::multimodal::Gemma4VisionForward(pixels,pos,18,w,cfg,backend),
+                        doctest::Contains(message));
+      storage=original;
+    }
+  };
+  int index=0;
+  for(auto* v:{&b.q_proj,&b.k_proj,&b.v_proj,&b.o_proj}) {
+    CAPTURE(index); reject_sizes(*v,"attention weight shape"); ++index;
+  }
+  for(auto* v:{&b.gate_proj,&b.up_proj,&b.down_proj})reject_sizes(*v,"MLP weight shape");
+  for(auto* v:{&b.input_ln,&b.post_attn_ln,&b.pre_ff_ln,&b.post_ff_ln})reject_sizes(*v,"norm weight shape");
+  for(auto* v:{&b.q_norm,&b.k_norm})reject_sizes(*v,"head norm shape");
+  reject_sizes(w.input_proj,"weight shape");
+  reject_sizes(w.position_embedding_table,"weight shape");
+  reject_sizes(w.embed_projection,"weight shape");
+  reject_sizes(w.blocks,"weight shape");
+}
+
+TEST_CASE("E4B vision: shared registry rejects malformed raw connector") {
+  const auto j=golden(); const auto c=config(j);
+  const vllm::ModelRegistration reg{"Gemma4ForConditionalGeneration",&vllm::kGemma4MmHooks,{}};
+  vllm::multimodal::MultiModalFeatureSpec item;
+  item.modality="image"; item.length=2;
+  item.data=std::make_shared<vllm::multimodal::ImageKwargs>();
+  item.data->num_patches=18; item.data->patch_feature_dim=768;
+  item.data->image_grid_thw={1,3,6};
+  item.data->pixel_values_f32=j.at("small").at("pixels").get<std::vector<float>>();
+  vt::Queue q{};
+  for(int mode=0;mode<9;++mode) {
+    CAPTURE(mode);
+    auto w=weights(c); auto& p=w.vision.embedding_projection;
+    if(mode==0)p.dtype=vt::DType::kF32;
+    if(mode==1)p.rank=1;
+    if(mode==2)--p.shape[0];
+    if(mode==3)++p.shape[0];
+    if(mode==4)--p.shape[1];
+    if(mode==5)++p.shape[1];
+    if(mode>=6) {
+      // Own a copy before resizing; the loader may return borrowed storage.
+      std::vector<uint8_t> bytes(p.bytes.begin(),p.bytes.end());
+      if(mode==6)bytes.resize(bytes.size()-1);
+      if(mode==7)bytes.resize(bytes.size()+1);
+      if(mode==8)bytes.resize(bytes.size()+2);
+      p.bytes=vllm::OwnedBytes(std::move(bytes));
+    }
+    vllm::Gemma4LoadedModel model(reg,std::move(w));
+    CHECK_THROWS_WITH(vllm::ModelRegistry::EncodeMm(model,c,q,item),
+                      doctest::Contains("BF16 connector shape"));
+  }
+}

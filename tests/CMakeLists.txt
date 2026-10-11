@@ -4849,7 +4849,7 @@ target_compile_definitions(test_gemma4_e4b_vision_execution PRIVATE
 vllm_cpp_set_warnings(test_gemma4_e4b_vision_execution)
 add_test(NAME test_gemma4_e4b_vision_execution COMMAND test_gemma4_e4b_vision_execution)
 set_tests_properties(test_gemma4_e4b_vision_execution PROPERTIES
-  PASS_REGULAR_EXPRESSION "test cases: +2 [|] +2 passed [|] +0 failed [|] +0 skipped"
+  PASS_REGULAR_EXPRESSION "test cases: +5 [|] +5 passed [|] +0 failed [|] +0 skipped"
   FAIL_REGULAR_EXPRESSION "Status: FAILURE")
 get_target_property(E4B_EXEC_SOURCES test_gemma4_e4b_vision_execution SOURCES)
 list(REMOVE_ITEM E4B_EXEC_SOURCES vllm/models/test_gemma4_e4b_vision_execution.cpp)
