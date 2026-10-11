@@ -137,6 +137,9 @@ std::vector<float> Gemma4AudioForward(const std::vector<float>& input_features, 
   const int64_t hd = cfg.head_dim;
   const int64_t F = cfg.feature_size;
   const float eps = cfg.rms_norm_eps;
+  // HF a08ace4 modeling_gemma4.py:198,423-424,535-537: these block
+  // norms use Gemma4RMSNorm's default, unlike frontend/light-conv/connector.
+  constexpr float block_eps = 1e-6f;
 
   // ---- mask over the T mel frames (1=valid). Absent => all valid. ------------
   std::vector<int32_t> mask0(static_cast<size_t>(T), 1);
@@ -240,12 +243,12 @@ std::vector<float> Gemma4AudioForward(const std::vector<float>& input_features, 
   auto ff_forward = [&](std::vector<float>& x, const Gemma4AudioFFWeights& fw) {
     std::vector<float> residual = x;
     for (auto& v : x) v = Clampf(v, -grad_clip, grad_clip);
-    RmsNorm(x, S, H, &fw.pre_ln, eps);
+    RmsNorm(x, S, H, &fw.pre_ln, block_eps);
     std::vector<float> h1 = ClipLin(x, S, H, fw.ffw1, cfg.ffn_dim());
     for (auto& v : h1) v = Siluf(v);
     std::vector<float> h2 = ClipLin(h1, S, cfg.ffn_dim(), fw.ffw2, H);
     for (auto& v : h2) v = Clampf(v, -grad_clip, grad_clip);
-    RmsNorm(h2, S, H, &fw.post_ln, eps);
+    RmsNorm(h2, S, H, &fw.post_ln, block_eps);
     for (size_t i = 0; i < x.size(); ++i)
       x[i] = h2[i] * cfg.residual_weight + residual[i];
   };
@@ -260,7 +263,7 @@ std::vector<float> Gemma4AudioForward(const std::vector<float>& input_features, 
     std::vector<float> residual = hidden;
     std::vector<float> x = hidden;
     for (auto& v : x) v = Clampf(v, -grad_clip, grad_clip);
-    RmsNorm(x, S, H, &lw.norm_pre_attn, eps);
+    RmsNorm(x, S, H, &lw.norm_pre_attn, block_eps);
 
     // q,k,v projections [S,H], view [S,nh,hd].
     std::vector<float> qv = ClipLin(x, S, H, lw.attn.q_proj, H);
@@ -348,7 +351,7 @@ std::vector<float> Gemma4AudioForward(const std::vector<float>& input_features, 
     // post proj (clippable) + clamp + norm_post_attn + residual add.
     std::vector<float> attn = ClipLin(attn_out, S, H, lw.attn.post, H);
     for (auto& v : attn) v = Clampf(v, -grad_clip, grad_clip);
-    RmsNorm(attn, S, H, &lw.norm_post_attn, eps);
+    RmsNorm(attn, S, H, &lw.norm_post_attn, block_eps);
     for (size_t i = 0; i < hidden.size(); ++i) hidden[i] = attn[i] + residual[i];
 
     // ---- light conv module ----
@@ -393,7 +396,7 @@ std::vector<float> Gemma4AudioForward(const std::vector<float>& input_features, 
 
     // norm_out (clamp + RMSNorm)
     for (auto& v : hidden) v = Clampf(v, -grad_clip, grad_clip);
-    RmsNorm(hidden, S, H, &lw.norm_out, eps);
+    RmsNorm(hidden, S, H, &lw.norm_out, block_eps);
 
     if (cap != nullptr) {
       if (li == 0) cap->block0 = hidden;

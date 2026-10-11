@@ -758,3 +758,26 @@ minimal 15-real-TU CPU build at -j2 and scratch below 256 MiB. Evidence belongs
 in assets/work/2026-10-10-e4b-audio-epsilon-fix. No headers or capability changes
 are needed. Full preflight, T03-T06 and runtime acceptance remain pending;
 no GPU, weights, installation, remote operation or full preflight is authorized.
+
+### Audio epsilon correction verification
+
+Spec ea30d690a precedes this correction. Five block callsites now use fixed
+1e-6; frontend, light-conv and connector retain configured epsilon. The new
+loaded scalar oracle uses two sparse nonzero blocks, one token, BF16-exact
+weights, eps=1e-4/1e-2 and both loader ownership paths through shared registry
+dispatch. Initial red: 43/44 cases pass, 6 numeric assertions fail (7139 total).
+After increasing the light-conv output weight to expose its epsilon contract,
+all eleven compiled/linked scratch mutants fail numeric assertions: all five
+fixed callsites reverted together, each separately, each frontend norm, each
+light-conv norm and connector independently switched to the wrong epsilon.
+An initial mutant compile error from the unused constant is not a kill; the
+scratch reversion removes that constant without changing compiler flags.
+
+Final minimal 15-real-TU CPU gate and exact-count CTest pass 44 cases / 7139
+assertions, zero skips. All original 43 cases remain. The 28 metadata tests,
+offline CLI, records and symbol anchors pass. No headers changed. Evidence:
+assets/work/2026-10-10-e4b-audio-epsilon-fix. The fixture proves these epsilon
+contracts, not general multi-token Conformer parity. SupportsMmInputs remains
+false; embed_mm is absent. Full preflight, original-checkpoint execution,
+production BF16, T03-T06 and runtime acceptance remain pending. Await root
+verification and independent cumulative review 2b63b of the committed head.

@@ -1184,3 +1184,84 @@ TEST_CASE("E4B execution: real tower responds to features and strips trailing pa
   CHECK(changed.embeds.Ptr<float>()[0]>2.2f);
   CHECK(changed.embeds.Ptr<float>()[1]==doctest::Approx(0));
 }
+
+TEST_CASE("E4B execution: small nonzero blocks distinguish fixed and configured epsilon") {
+  // HF a08ace4: RMSNorm :198, FF :423-424, layer :535-537 use 1e-6;
+  // frontend :394-399 and light-conv :499-500 use config epsilon.
+  // One token, one active hidden channel: attention probability is exactly 1.
+  // All stored weights below are exactly representable in BF16. No production
+  // math helper or capture is used to compute the independent scalar oracle.
+  for (double eps : {0.0001, 0.01}) for (bool owned : {false, true}) {
+    CAPTURE(eps); CAPTURE(owned);
+    Fixture f; auto c=audio_config(); add_audio(f,4,4,2); f.add(audio_proj,{2,5});
+    c.raw["audio_config"]["rms_norm_eps"]=eps;
+    c.raw["audio_config"]["use_clipped_linears"]=false;
+    auto sparse=[&](const std::string& name,
+                    std::initializer_list<std::pair<size_t,float>> entries) {
+      const auto start=f.header[name]["data_offsets"][0].get<size_t>();
+      const auto end=f.header[name]["data_offsets"][1].get<size_t>();
+      std::fill(f.bytes.begin()+start,f.bytes.begin()+end,0);
+      for (auto [i,x]:entries) {
+        REQUIRE(start+2*i+2<=end);
+        const auto bits=vt::F32ToBF16(x);
+        std::memcpy(f.bytes.data()+start+2*i,&bits,2);
+      }
+    };
+    sparse(audio_prefix+"layer0.conv.weight",{{4,0.125f}});
+    sparse(audio_prefix+"layer0.norm.weight",{{0,1}});
+    sparse(audio_prefix+"layer1.conv.weight",{{4,0.125f}});
+    sparse(audio_prefix+"layer1.norm.weight",{{0,1}});
+    sparse(audio_prefix+"input_proj_linear.weight",{{0,1.0f/128}});
+    for (int l=0;l<2;++l) {
+      const auto p="model.audio_tower.layers."+std::to_string(l)+".";
+      for (const auto& e:ai()) {
+        if (e.name.find("norm")!=std::string::npos)
+          sparse(p+e.name,{{0,1.0f/128}});
+        else if (e.name=="lconv1d.linear_end.linear.weight")
+          sparse(p+e.name,{{0,8}}); // expose both configured light-conv norms
+        else if (e.name=="lconv1d.depthwise_conv1d.weight")
+          sparse(p+e.name,{{4,0.125f}}); // last causal tap
+        else if (e.name=="lconv1d.linear_start.linear.weight")
+          sparse(p+e.name,{{0,0.125f},{16,0.125f}}); // GLU value and gate
+        else sparse(p+e.name,{{0,0.125f}});
+      }
+    }
+    sparse("model.audio_tower.output_proj.weight",{{0,0.125f}});
+    sparse("model.audio_tower.output_proj.bias",{{1,1.0f/256}});
+    sparse(audio_proj,{{0,1},{6,1}});
+    auto weights=load_audio_fixture(f,c,owned);
+    const vllm::ModelRegistration registration{
+        "Gemma4ForConditionalGeneration",&vllm::kGemma4MmHooks,{}};
+    vllm::Gemma4LoadedModel model(registration,std::move(weights));
+    vt::Queue q{}; vllm::multimodal::MultiModalFeatureSpec item;
+    item.modality="audio"; item.length=1;
+    item.audio_data=std::make_shared<vllm::multimodal::AudioKwargs>();
+    auto& a=*item.audio_data; a.n_frames=1; a.n_mels=4;
+    a.input_features={1.0f/32,0,0,0};
+    const auto out=vllm::ModelRegistry::EncodeMm(model,c,q,item);
+    REQUIRE(out.embeds.shape[0]==1); REQUIRE(out.embeds.shape[1]==2);
+
+    // LayerNorm([u,0,0,0]) then LayerNorm([v,0]), ReLU and projection.
+    const double u=(1.0/32)/8;
+    const double v=(3*u/4)/std::sqrt(3*u*u/16+eps)/8;
+    double x=(v/2)/std::sqrt(v*v/4+eps)/128;
+    const auto rms=[](double z,double e) {return z/std::sqrt(z*z/4+e)/128;};
+    const auto silu=[](double z) {return z/(1+std::exp(-z));};
+    const auto ff=[&](double z) {
+      return z+0.5*rms(silu(rms(z,1e-6)/8)/8,1e-6);
+    };
+    for (int l=0;l<2;++l) {
+      x=ff(x);
+      x+=rms(rms(x,1e-6)/64,1e-6); // V, one-token attention, post
+      const double g=rms(x,eps)/8;
+      x+=8*silu(rms((g/(1+std::exp(-g)))/8,eps));
+      x=rms(ff(x),1e-6);
+    }
+    const double y=x/8, bias=1.0/256;
+    const double denom=std::sqrt((y*y+bias*bias)/5+eps);
+    const double expected0=y/denom, expected1=bias/denom;
+    CAPTURE(expected0); CAPTURE(expected1);
+    CHECK(out.embeds.Ptr<float>()[0]==doctest::Approx(expected0).epsilon(2e-5));
+    CHECK(out.embeds.Ptr<float>()[1]==doctest::Approx(expected1).epsilon(2e-5));
+  }
+}
