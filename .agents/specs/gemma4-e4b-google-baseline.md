@@ -922,12 +922,42 @@ waived.
 
 Corrective RED captured before repair: run.py red freshly compiled and linked
 both actual test targets (max two compiler processes), then each executable
-returned 1. Frontend: 0/5 cases pass, 11/16 assertions pass; all five fail at
+returned 1. Frontend: 0/5 cases pass, all 11 assertions pass; all five fail at
 explicit missing frontend/shared FFT exceptions on valid input. Loader:
-44/45 cases pass, 7139/7140 assertions pass; only the waveform-consumer case
+44/45 cases pass, all 7139 assertions pass; only the waveform-consumer case
 fails at the frontend refusal. Thus existing loader behavior remains green
 while required missing functionality is RED, without broken includes or links.
 Logs and exact red patch are in the correction evidence directory. Invalid-input
 CHECK_THROWS passing under blanket refusal proves no validation guarantee;
 only valid-input failures constitute this RED evidence. No repair has yet been
 applied, and historical missing RED remains unsatisfied.
+
+Counter correction: 78ea4cbb0 incorrectly added case exceptions to assertion
+denominators. Actual RED logs contain 11 and 7139 passing assertions, zero
+failed assertions, and five/one case exceptions respectively. This correction
+is recorded in a new commit, without amending the RED-state history.
+
+### T05A corrective repair verification
+
+Plan ae1b9055e preceded RED-state commit 78ea4cbb0; both remain in history.
+After that captured RED, the repair restores the complete bounded frontend,
+HTK mel construction and shared radix-2 FFT, including w2v's shared caller.
+Reviewed arithmetic is reused byte-for-byte from 23c1b906, not independently
+rediscovered. There are no remaining rejection placeholders and no changes to
+tests, fixtures, tolerances or CMake. Relative to 23c1b906 the final product and
+test trees are identical; the corrective history and this record are new.
+
+Fresh real-TU builds and direct runs pass frontend 5 cases/5225 assertions,
+loader 45/7149 and w2v 6/20973, all with zero skips. Named CMake targets built
+at -j2 and exact-count CTest passed 2/2. Metadata passes 28/28; all eight header
+consumers pass with actual compilation flags. Records, symbol anchors and diff
+whitespace checks pass. Evidence and reproduction commands remain under
+assets/work/2026-10-10-e4b-audio-correction. Scratch is 19 MiB (existing bounded
+build separately 72 MiB); available disk is 14 GiB. No broad build, full
+preflight, GPU, weights, installation or remote operation ran.
+
+Status: corrective implementation awaits root verification and independent
+review of the new repair commit. Original missing preimplementation RED is
+still historical process FAIL, NOT waived and NOT retroactively satisfied.
+The open issue, T05 PARTIAL, full preflight and original runtime/oracle gates
+remain unchanged. The final policy disposition belongs to root after review.
