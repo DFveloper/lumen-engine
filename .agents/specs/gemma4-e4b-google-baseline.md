@@ -1379,3 +1379,27 @@ Media payload fields remain opaque; only container/type/text shape is validated.
 Programmatic media without retained original content is refused. Raw media,
 T10 full-chain reachability, T03B token parity, T03C parsers, full T02/T03 and
 runtime acceptance remain pending. Full preflight prohibited/PENDING.
+
+### T03A F1 empty schema repair (prospective)
+
+ISSUE-LOCAL-01M4NX9D8CDAB2GXHNJE40HNG4 tracks independent reviewer660d7ac2
+F1 at f340f218. Original Google line26 omits empty array items; minja emits
+items:{}. Add independently generated Jinja2 3.1.2 cases for empty items,
+nested object/array properties, nonempty controls, empty parameters and empty
+properties. Demonstrate executable byte-comparison RED before product edits.
+Audit mapping truth tests in the unchanged exact fixture, including line95
+params. Preserve mapping type tests (lines36/66/131/170/248): an empty map
+there is intentionally still a mapping, not a false branch. Schema description,
+type, required, enum and nullable fields use their string/list/bool contracts;
+this repair does not redefine malformed schema types or rewrite minja.
+
+Only the existing full-SHA source adapter may qualify mapping truth conditions
+with nonzero length. Original fixture and Python oracle semantics remain
+unchanged. Other templates, typed content and readiness are unchanged. Reuse
+actual standalone closure, max-j2 and VT_CPU_THREADS=1. Run template and four
+CPU targets with exact cases/no skips plus28metadata. Evidence lives in
+assets/work/2026-10-11-e4b-template-fix; total incremental budget256MiB includes
+writer/review scratch (~72MiB already), stop below4GiB free. Full preflight
+prohibited/PENDING; no GPU/network/weights/install/full-library/push/PR/merge.
+Inherited scoped helper role retained. Root verification then fresh independent
+mutation review remain owed; full T03/T10/runtime readiness remains false.
