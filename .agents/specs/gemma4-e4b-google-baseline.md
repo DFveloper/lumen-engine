@@ -961,3 +961,44 @@ review of the new repair commit. Original missing preimplementation RED is
 still historical process FAIL, NOT waived and NOT retroactively satisfied.
 The open issue, T05 PARTIAL, full preflight and original runtime/oracle gates
 remain unchanged. The final policy disposition belongs to root after review.
+
+### Bounded shared embedding merge (prospective)
+
+T05A corrective scope is reviewed per rootbg242/review39093660: frontend
+5/5225, loader 45/7149, metadata 28. Historical 23c1b906 missing RED remains
+FAIL; no further rollback or retrospective waiver is intended.
+
+This prerequisite uses the existing ModelRegistry::EmbedMm and ForwardMm ABI,
+not another runner. The shared ENG-MM-INPUT-PIPELINE seam is extended only by a
+factory readiness boolean defaulting true. SupportsMmInputs must additionally
+require readiness. Gemma sets it false: CPU reference encode/merge callable
+hooks are not served-runtime capability. Other factories retain their existing
+semantics. Direct dispatch remains callable for bounded verification.
+
+Pinned source: planning/e4b/sources/vllm-gemma4_mm.py embed_input_ids maps MM
+positions to PLE id zero before get_per_layer_inputs; the existing text
+ForwardBody and EmbedScaledBf16 implement BF16-rounded sqrt(hidden) scaling.
+Merge emits owned BF16 [T,H] and I32 [T] PLE buffers for existing ForwardMm.
+Text lookup is scaled and rounded before audio overwrites, audio is rounded to
+BF16 without text scale, PLE text ids outside vocab_size_per_layer_input map
+to zero. CPU only; stale device ids, nonempty MRoPE, invalid token ids, masks,
+cardinality, dtype, shape, stride, nonfinite values and empty steps fail closed.
+Ordered encoder row slices are already chunk-relative; merge does not apply
+prefill offsets again. Multiple ordered slices are supported.
+
+MmEmbedInputs has no original spans or modality metadata. Duplicate indices,
+overlap and source range are upstream admission/gather responsibilities, not
+claims of this merge. Tests will exercise represented slice/cardinality errors
+and chunk slices; original-span admission coverage remains a separate shared
+pipeline gate. Image/video encoding and CUDA remain refused. No full media
+capability is advertised.
+
+Fresh executable RED must precede behavior, using the existing real-TU CPU
+loader target. Then verify independent text/audio/PLE expectations, ownership,
+malformed inputs and capability default compatibility. Attempt real production
+factory resolution without stubs; document concrete linkage limits if bounded
+linking cannot reach it. Retain frontend, loader and metadata regressions and
+actual-flags header consumers. Scratch assets/work/2026-10-10-e4b-embedding-merge
+is capped at 256 MiB, external TMPDIR/Git ceiling, -j2, stop below 4 GiB free.
+Full preflight, GPU, weights, installs and remote operations prohibited. T03,
+T04, T06, device BF16, original oracle and served-runtime acceptance pending.
