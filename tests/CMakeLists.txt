@@ -4886,3 +4886,39 @@ set_tests_properties(test_gemma4_e4b_template PROPERTIES
   PASS_REGULAR_EXPRESSION "test cases: +48 [|] +48 passed [|] +0 failed [|] +0 skipped"
   FAIL_REGULAR_EXPRESSION "Status: FAILURE"
   ENVIRONMENT "VT_CPU_THREADS=1")
+
+# Bounded real-provider factory gate; no libvllm or tool-factory substitution.
+add_executable(test_gemma4_e4b_reasoning_end
+  vllm/parser/test_gemma4_e4b_reasoning_end.cpp
+  ../src/vllm/parser/parser_manager.cpp
+  ../src/vllm/parser/gemma4.cpp
+  ../src/vllm/parser/qwen3.cpp
+  ../src/vllm/parser/kimi_k2.cpp
+  ../src/vllm/parser/glm47_moe.cpp
+  ../src/vllm/parser/inkling.cpp
+  ../src/vllm/parser/engine/configs.cpp
+  ../src/vllm/parser/engine/parser_engine.cpp
+  ../src/vllm/parser/engine/streaming_parser_engine.cpp
+  ../src/vllm/parser/engine/incremental_lexer.cpp
+  ../src/vllm/parser/engine/token_id_scanner.cpp
+  ../src/vllm/entrypoints/openai/tool_parsers/utils.cpp
+  ../src/vllm/entrypoints/openai/tool_parsers/abstract.cpp)
+target_include_directories(test_gemma4_e4b_reasoning_end PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_gemma4_e4b_reasoning_end PRIVATE vllm_test_main)
+if(MSVC)
+  target_compile_options(test_gemma4_e4b_reasoning_end PRIVATE /Gy /Gw)
+  target_link_options(test_gemma4_e4b_reasoning_end PRIVATE /OPT:REF)
+else()
+  target_compile_options(test_gemma4_e4b_reasoning_end PRIVATE -ffunction-sections -fdata-sections)
+  if(APPLE)
+    target_link_options(test_gemma4_e4b_reasoning_end PRIVATE -Wl,-dead_strip)
+  else()
+    target_link_options(test_gemma4_e4b_reasoning_end PRIVATE -Wl,--gc-sections)
+  endif()
+endif()
+vllm_cpp_set_warnings(test_gemma4_e4b_reasoning_end)
+add_test(NAME test_gemma4_e4b_reasoning_end COMMAND test_gemma4_e4b_reasoning_end)
+set_tests_properties(test_gemma4_e4b_reasoning_end PROPERTIES
+  PASS_REGULAR_EXPRESSION "test cases: +5 [|] +5 passed [|] +0 failed [|] +0 skipped"
+  FAIL_REGULAR_EXPRESSION "Status: FAILURE"
+  ENVIRONMENT "VT_CPU_THREADS=1")

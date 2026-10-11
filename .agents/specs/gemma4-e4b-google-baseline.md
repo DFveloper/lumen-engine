@@ -1468,3 +1468,30 @@ Max-j2, VT_CPU_THREADS=1, external TMPDIR, Git ceiling assets/work; stop below
 4GiB free or256MiB aggregate campaign growth (about119MiB used at entry).
 No GPU/network/install/download/full-library/push/PR/merge or unrelated cleanup.
 Root verification and fresh independent review follow implementation commit.
+
+### T03C1 implementation evidence — awaiting root and fresh review
+
+Prospective c0f304521 preceded executable RED:4 cases/208 assertions,
+30 failed, including canonical enabled new-turn true-versus-false mismatch.
+The factory's one-argument overload now selects false only for Gemma; existing
+explicit bool calls and tokenizer-first Gemma construction remain compatible.
+The Gemma override evaluates the latest complete literal, equivalent to the
+pinned reverse scan for these distinct markers. Generic engine/config and
+serving/text-tool code remain unchanged. Initial assembly state stays CONTENT.
+
+Final new target:5 cases/226 assertions, zero skips. Three canonical new-turn
+parameters, all nine retained streaming end-detector parameters in text form,
+24 tail rows across omitted/false/true, plain-content checks and nine-family
+default regressions pass. This is not a port of streaming/prompt lifecycle.
+Full CTest6/6 passes: template48/415, loader46/7196, audio5/5225,
+image4/201, vision5/1172 and reasoning-end5/226. Metadata28 passes.
+33 changed-header consumers pass actual-flags syntax checks. Scratch factory
+construction deletion compiles/links and fails4 assertions (5 cases, zero skips).
+Real13-provider standalone closure links without extra providers or stubs.
+
+Evidence and reproducible commands: assets/work/2026-10-11-e4b-reasoning-end.
+Initial build invocation needed CMake regeneration; that setup error is not RED.
+Aggregate campaign growth is about142MiB of256MiB; free space exceeds4GiB.
+Root verification/fresh review remain pending. T03B, prompt preparation, served
+reasoning, T10, original weights and full preflight remain owed. Full T03 is not
+complete; SupportsMmInputs remains false.
