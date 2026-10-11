@@ -1162,6 +1162,7 @@ add_library(vllm STATIC
   # LOAD-GGUF-MMPROJ (#821): the llama.cpp `clip` mmproj reader that fills the
   # SAME Qwen3VLVisionWeights from a SECOND GGUF file beside the language one.
   src/vllm/model_executor/models/clip_mmproj_gguf.cpp
+  src/vllm/model_executor/models/gemma4_vision_input.cpp
   src/vllm/model_executor/models/gemma4_vision.cpp
   src/vllm/model_executor/models/deepseek_v4_vision.cpp
   src/vllm/model_executor/models/gemma4_audio_encoder.cpp
@@ -1178,6 +1179,7 @@ add_library(vllm STATIC
   src/vllm/multimodal/processing/context.cpp
   src/vllm/multimodal/processing/processor.cpp
   src/vllm/multimodal/dots3_note_processor.cpp
+  src/vllm/multimodal/gemma4_image_processor.cpp
   src/vllm/multimodal/gemma4_audio_processor.cpp
   src/vllm/multimodal/mel_filter_bank.cpp
   # Pillow's BICUBIC resampler, which is NOT torchvision's and NOT a four-tap

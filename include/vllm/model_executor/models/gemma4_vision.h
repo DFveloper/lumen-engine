@@ -116,6 +116,12 @@ struct Gemma4VisionCapture {
   std::vector<float> projected;        // [n_soft, text_hidden]
 };
 
+// Validate the actual tower input boundary before backend allocation; returns
+// the nonempty contiguous valid prefix. Positions encode the padding mask.
+int64_t ValidateGemma4VisionInput(const std::vector<float>& pixels,
+                                 const std::vector<int64_t>& positions,
+                                 int64_t n_total, const Gemma4VisionConfig& cfg);
+
 // Runs the tower on one image. pixel_values is [n_total, patch_dim] host f32 in
 // [0,1]; position_ids is [n_total, 2] host i64 ((x,y); (-1,-1)==padding, trailing
 // contiguous). Returns the projected soft tokens [n_soft, text_hidden] host f32

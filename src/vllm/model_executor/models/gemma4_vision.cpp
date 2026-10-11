@@ -184,6 +184,7 @@ std::vector<float> Gemma4VisionForward(const std::vector<float>& pixel_values,
                                        const std::vector<int64_t>& position_ids, int64_t n_total,
                                        const Gemma4VisionWeights& w, const Gemma4VisionConfig& cfg,
                                        Backend& b, Gemma4VisionCapture* cap) {
+  const int64_t L = ValidateGemma4VisionInput(pixel_values, position_ids, n_total, cfg);
   Queue q = b.CreateQueue();
   const int64_t H = cfg.hidden_size;
   const int64_t nh = cfg.num_heads;
@@ -192,17 +193,6 @@ std::vector<float> Gemma4VisionForward(const std::vector<float>& pixel_values,
   const int64_t PD = cfg.patch_dim();
   const int64_t k = cfg.pooling_kernel_size;
   const float eps = cfg.rms_norm_eps;
-
-  // --- valid-prefix length (padding (-1,-1) is a trailing contiguous block) ---
-  int64_t n_valid = n_total;
-  for (int64_t r = 0; r < n_total; ++r) {
-    if (position_ids[static_cast<size_t>(r) * 2] < 0 &&
-        position_ids[static_cast<size_t>(r) * 2 + 1] < 0) {
-      n_valid = r;
-      break;
-    }
-  }
-  const int64_t L = n_valid;
 
   // --- host precompute: 2-D pos-embed lookup (x_emb + y_emb), valid rows -------
   // position_embedding_table [2, pos_embed_size, H]; table[0]=x, table[1]=y.

@@ -1083,3 +1083,39 @@ no GPU/weights/install/full-library/remote/push/PR/merge. Commit runnable code
 and hand immutable SHA to root for verification and fresh independent review.
 Original vision execution, video, template, oracle and served-runtime gates
 remain pending. Open milestone ISSUE-LOCAL-01M4KSETGY63TDEDPF6EHQHRA8 unchanged.
+
+### T04A implementation evidence — awaiting review
+
+After spec 0c64366e3, fresh real-TU RED built and exited 1: 0/2 cases,
+6/17 assertions passing, valid image rejected by explicit missing behavior.
+The subsequent implementation replaces that placeholder with source identity
+geometry, float32 1/255 rescaling, raster HWC patches, xy positions, zero/-1
+padding and valid soft-token counts. Shared ImageKwargs storage is reused;
+shared RGB callers and PIL resampler are unchanged. All required resize is
+explicitly refused, not approximated. Bounds are checked before allocation.
+
+GREEN: new target 3 cases/138 assertions, zero skips; nine supported images
+include all budgets, portrait/landscape, default square and thin no-padding
+cases. Every pixel and position is independently checked, plus malformed
+inputs and tower-contract failures. Tiny source geometry fixture executes the
+exact pinned function body, not full HF processor. Tests exercise the same
+ValidateGemma4VisionInput invoked by Gemma4VisionForward before CreateQueue;
+no backend/tower inference or numerical output is claimed. New validator
+checks shapes, raster positions, pooling divisibility, pixel range/finiteness
+and trailing padding. Actual tower TU and five other direct consumers pass
+actual-command syntax checks. Loader 46/7196, frontend 5/5225, metadata 28,
+exact-count CTest 3/3, records and anchors PASS. clang-format unavailable;
+whitespace and commit style/trailers checked. Evidence/reproduction under
+assets/work/2026-10-10-e4b-image-preprocessing, well below 256 MiB, -j2,
+external TMPDIR/Git ceiling, 13 GiB free. Full preflight remains prohibited
+and PENDING. No GPU, weights, install, full-library build or remote operation.
+
+Missing torchvision blocks local resize oracle comparison, NOT inherently
+C++ resampler implementation. General antialiased tensor bicubic remains an
+explicit required milestone, not a permanent waiver. Next capture approved
+pinned-source up/downscale, noninteger, asymmetric and extreme-aspect fixtures
+with compatible Torch/torchvision versions/dtypes recorded; compare resized
+bytes and final patches/positions/counts, including rounding/clipping and edge
+support. T03 template, video, full processor/prompt pipeline, numerical vision
+execution, full factory and served runtime remain pending. SupportsMmInputs
+stays false. Immutable implementation awaits root verification and fresh review.

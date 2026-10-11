@@ -4801,3 +4801,16 @@ add_test(NAME test_gemma4_e4b_audio_processor COMMAND test_gemma4_e4b_audio_proc
 set_tests_properties(test_gemma4_e4b_audio_processor PROPERTIES
   PASS_REGULAR_EXPRESSION "test cases: +5 [|] +5 passed [|] +0 failed [|] +0 skipped"
   FAIL_REGULAR_EXPRESSION "Status: FAILURE")
+
+# T04A decoded RGB prerequisite: bounded real production TUs, no backend mock.
+add_executable(test_gemma4_e4b_image_processor
+  vllm/multimodal/test_gemma4_e4b_image_processor.cpp
+  ../src/vllm/multimodal/gemma4_image_processor.cpp
+  ../src/vllm/model_executor/models/gemma4_vision_input.cpp)
+target_include_directories(test_gemma4_e4b_image_processor PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(test_gemma4_e4b_image_processor PRIVATE vllm_test_main)
+vllm_cpp_set_warnings(test_gemma4_e4b_image_processor)
+add_test(NAME test_gemma4_e4b_image_processor COMMAND test_gemma4_e4b_image_processor)
+set_tests_properties(test_gemma4_e4b_image_processor PROPERTIES
+  PASS_REGULAR_EXPRESSION "test cases: +3 [|] +3 passed [|] +0 failed [|] +0 skipped"
+  FAIL_REGULAR_EXPRESSION "Status: FAILURE")
