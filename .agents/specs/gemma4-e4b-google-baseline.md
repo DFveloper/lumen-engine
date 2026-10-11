@@ -1119,3 +1119,31 @@ bytes and final patches/positions/counts, including rounding/clipping and edge
 support. T03 template, video, full processor/prompt pipeline, numerical vision
 execution, full factory and served runtime remain pending. SupportsMmInputs
 stays false. Immutable implementation awaits root verification and fresh review.
+
+### T04B tensor uint8 antialiased resize (prospective)
+
+T04A is reviewed bounded-only per rootbg339/review24fda: 3/138 and 5025
+source-geometry AST comparisons; not full processor or vision execution.
+Installed Torch 2.11.0+cu130 (70d99e998b4955e0049d13a98d77ae1b14db1f45)
+executes CPU uint8 bicubic AA. Qualify torchvision v0.26.0 source paired with
+Torch 2.11: v2 resize_image keeps CPU bicubic uint8, calls interpolate with
+align_corners=False and antialias=True. No float cast/round occurs on this arm.
+Use this installed ATen oracle, not Pillow or float interpolate. Fetch only
+small immutable sources, recording hashes. ATen computes double Keys -0.5
+weights, clipped and normalized support, per-axis int16 precision selected from
+maximum positive weight, signed half-away coefficient rounding, horizontal then
+vertical uint8 rounding/clamping. Shared Pillow uses fixed 22-bit precision and
+cannot be reused unchanged. Add a private bounded source-backed kernel without
+changing shared resampling or normalization. Stream horizontal rows per vertical
+window so extreme axes cannot allocate input-height times output-width storage.
+Retain dimension/area bounds, fixed patch16/pool3, identity shortcut and budgets.
+
+Before behavior, generate independent Torch uint8 golden bytes and require
+actual processor output to match all patch scalars, positions/padding/count and
+actual tower input validator. Cover up/down, asymmetric noninteger, extreme
+axes, overshoot/clipping patterns, all five budgets. Genuine executable RED
+must precede implementation. CPU -j2 only; scratch <=256 MiB, stop below 4 GiB;
+external TMPDIR/Git ceiling. Retain image, audio 5/5225, loader 46/7196 and
+metadata 28; actual-flags headers, records/anchors/style/trailers. Full preflight
+prohibited by task, pending. No installation, GPU, weights or remote operation.
+Full HF processor, vision execution and served claims remain pending.
