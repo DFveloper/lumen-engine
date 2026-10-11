@@ -642,3 +642,54 @@ including the frontend, but no original checkpoint payload was loaded. T02
 remains PARTIAL. Production BF16, encoder hooks, preprocessing, numerical gates
 and original-checkpoint runtime acceptance remain pending. Root rerun and fresh
 independent review of the implementation commit are required.
+
+## Loaded audio execution slice
+
+Complete retention at 220df15a3b7287475f990e26d353ba61f0d438c1 is reviewed:
+root supplied rootbg68 and reviewer aa1b137c PASS (41 cases / 6866 assertions,
+28 metadata tests; 751-header inventory matched). This is reported evidence,
+not a new rerun and not runtime acceptance.
+
+Pinned HF a08ace4bbd97e721c98751deec37d87b026acadc Gemma4AudioModel.forward and
+Gemma4AudioSubSampleConvProjection downsample the input mask twice; pinned
+vLLM a7c23ac96d Gemma4MultimodalEmbedder.forward applies weightless RMSNorm
+BEFORE its linear despite contradictory class prose. _process_audio_input
+selects the output mask's valid rows. Local artifacts are the previously
+recorded modeling_gemma4.py and planning/e4b/sources/vllm-gemma4_mm.py.
+
+Actual seam gaps: kGemma4Factory has neither encode_mm nor embed_mm;
+AudioKwargs is mel-major while Gemma4AudioForward is frame-major; the retained
+connector is BF16 OwnedTensor while the forward requires host-F32 embed_proj.
+The forward does not apply its input padding mask to attention and assumes
+right context zero. Vision uses backend operations and still has a GQA/MHA
+execution mismatch. Audio is the bounded next execution dependency.
+
+Implement the registered audio encoder arm using the shared MmEncoderOutput
+carrier, with owned CPU F32 output. Keep embed_mm absent: SupportsMmInputs must
+remain false until a working merge hook exists. The processor/server milestone
+is not claimed by a directly callable encoder hook. Expose the same encoder
+implementation to a tiny loaded-weight test, not a disconnected alternate
+helper. Unsupported modalities and non-CPU queues fail closed.
+
+Add an explicit optional AudioKwargs frame mask (empty means all valid), with
+strict boolean, exact-length, nonempty contiguous-valid-prefix validation.
+Support one chunk only. Transpose mel-major input. For causal/right-zero
+attention, trim trailing padding before forward; valid results cannot depend
+on future frames. The output row count is ceil(valid_frames/4), equivalent to
+mask[::2][::2] selection; require the placeholder count to match. Reject
+unsupported activations, uneven heads, odd hidden dimensions, nonzero right
+context, empty past window, and incompatible mel/input-projection widths.
+Do not silently execute unsupported loaded configurations. Preserve clipping
+bounds. Convert only the connector from owned BF16 to F32 for the existing
+forward, without copying the full tower. Keep production BF16 execution owed.
+
+T02 remains partial. This necessary encoder dependency is split ahead of the
+original T03 template / T04 image / T05 audio / T06 video chain; none is marked
+done. Full raw-input processing, merge hooks, decoder execution, numerical
+acceptance (T01B), and production dtype remain pending. Tiny source-derived
+scalar fixtures establish bounded connector arithmetic and call reachability,
+not full encoder numerical parity. Tests cover wrong inputs, meaningful
+outputs, padding equivalence, and deletion kills. Build only real required TUs
+in the existing minimal CPU target; record actual commands, regression counts,
+header checks and mutations in assets/work/2026-10-10-e4b-encoder-integration.
+Full preflight remains pending and is prohibited for this bounded task.
