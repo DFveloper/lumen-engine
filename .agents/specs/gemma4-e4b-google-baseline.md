@@ -1339,3 +1339,12 @@ Full preflight prohibited/PENDING, missing .env does not block CPU slice.
 Use existing build, max -j2, VT_CPU_THREADS=1, external TMPDIR and Git ceiling.
 Stop below 4GiB free or 256MiB incremental build plus scratch; no GPU/network/
 install/weights/push/merge or cleanup. Root rerun and fresh review required.
+
+T03A discovery before implementation: the exact Google fixture also fails minja
+parsing at adjacent string literals in raise_exception (row259). Preserve that
+executable failure as a real production render defect, not a compiler failure.
+For this exact hash only, join the three static diagnostic literals before
+minja parsing (Jinja/Python implicit literal concatenation). No vendored parser
+or other-template semantics change. Test original bytes as input throughout.
+Then separately rerun old flattened BuildMessages after syntax admission to
+prove marker-loss/refusal RED before the content implementation.
