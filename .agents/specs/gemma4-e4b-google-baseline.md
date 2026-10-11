@@ -533,3 +533,76 @@ T02 remains PARTIAL, awaiting root verification and fresh independent review.
 The remaining 746 audio_tower tensors, typed block/output config, encoder hooks,
 production BF16 execution and numerical/runtime gates are not supplied here.
 Full preflight remains pending and was not run, as authorized for this slice.
+
+## T02 complete audio tower retention contract
+
+Frontend b5360a5fb0ecaa2e9e4242245776b66f720623fe is reviewed per parent
+rootbg37/review62e: 34 cases, 3004 assertions, 28 metadata tests PASS.
+T02 remains PARTIAL; this change completes inventory, not inference.
+
+Pinned Transformers a08ace4bbd97e721c98751deec37d87b026acadc
+modeling_gemma4.py::Gemma4AudioLayer, Gemma4AudioFeedForward,
+Gemma4AudioAttention, Gemma4AudioLightConv1d, Gemma4ClippableLinear and
+Gemma4AudioModel define the following inventory. configuration_gemma4.py::
+Gemma4AudioConfig defines defaults. Local source artifacts are in
+assets/work/2026-10-10-e4b-vision and -vision-clipping; pinned vLLM
+planning/e4b/sources/gemma4_mm.py constructs the Transformers audio tower and
+maps model.audio_tower to audio_tower. The existing downloaded header is
+assets/work/2026-10-10-e4b-vision-clipping/header.json (no payload read).
+
+Under model.audio_tower.layers.{0..11}, H=1024, D=128, K=5:
+
+| Suffix | Shape | Count/layer |
+|---|---|---|
+| feed_forward{1,2}.ffw_layer_1.linear.weight | [4H,H] | 2 |
+| feed_forward{1,2}.ffw_layer_2.linear.weight | [H,4H] | 2 |
+| feed_forward{1,2}.{pre,post}_layer_norm.weight | [H] | 4 |
+| self_attn.{q,k,v}_proj.linear.weight | [heads*D,H] | 3 |
+| self_attn.post.linear.weight | [H,H] | 1 |
+| self_attn.relative_k_proj.weight | [heads*D,H] | 1 |
+| self_attn.per_dim_scale | [D] | 1 |
+| lconv1d.linear_start.linear.weight | [2H,H] | 1 |
+| lconv1d.linear_end.linear.weight | [H,H] | 1 |
+| lconv1d.depthwise_conv1d.weight | [H,1,K] | 1 |
+| lconv1d.{pre_layer_norm,conv_norm}.weight | [H] | 2 |
+| norm_{pre_attn,post_attn,out}.weight | [H] | 3 |
+| each of ten clippable linears: input_min/input_max/output_min/output_max | [] | 40 |
+
+These 62 tensors per layer total 744. output_proj.weight [1536,H] and
+output_proj.bias [1536] complete the remaining 746; with the five frontend
+weights, 751 source audio tensors are accounted for. Every listed tensor is
+BF16 in the header, including scalars. Accept only BF16 and widen exactly to
+owned host-F32 reference vectors, preserving source row-major layout, without
+transposes, 1+w transforms or finite sentinel substitution. This deliberate
+reference-storage exception is not a device dtype claim. All norms have plain
+learned scale and no bias. Only output_proj has bias. GLU is activation gating,
+not an extra learned gate. Relative positions and softcap are nonpersistent.
+No new representation is needed for these weights; fill the existing
+Gemma4AudioWeights on audio_frontend_weights, plus optional typed audio_config.
+
+Retain validated source defaults for layers(12), heads(8), kernel(5),
+chunk(12), left(13), right(0), residual(0.5), softcap(50), invalid logits(-1e9),
+gradient clipping(1e10), activation(silu), clipping(true). Frontend dimensions
+and epsilon remain validated by its existing contract. Retain output width
+using the existing connector compatibility fallback: absent/null/zero means H;
+a positive output_proj_dims sets the width for both output and connector.
+Head dimension is source integer H/heads (require nonzero); retain dimensions,
+not a claim that the existing host forward supports every such configuration.
+Validate numeric types, finite F32 narrowing, positive dimensions and checked
+matrix/layer/context products before lookup or allocation. Preserve full JSON.
+When clipping is false, bounds stay true +/-infinity; when true require all
+four BF16 rank-zero bounds, allow infinities/equality, reject NaN or reversed
+pairs with tensor-specific diagnostics. Reject incorrect shapes/dtypes/missing
+weights through both real decoder loaders. Optional absent audio stays empty.
+
+Tests precede behavior: multiple tiny source-structure layers, all weights and
+bounds distinct across layers/elements, lifetime after shard destruction,
+precise negative diagnostics for every inventory entry, clipping and config
+errors/overflow. Reuse only eight-TU CPU target with -j2, actual compile-command
+header checks, 28 metadata regressions and record/anchor/style/trailer checks.
+Scratch assets/work/2026-10-10-e4b-audio-blocks has 256 MiB incremental budget,
+external TMPDIR and Git ceiling; stop below 4 GiB free. Full preflight remains
+pending and prohibited in this bounded task. Commit implementation then request
+root verification and independent review. Encoder hooks, preprocessing,
+production device BF16, numeric/runtime acceptance and original-checkpoint
+execution remain owed even if all 751 tensors can be retained.
