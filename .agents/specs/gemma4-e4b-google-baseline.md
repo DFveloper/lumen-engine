@@ -1348,3 +1348,10 @@ minja parsing (Jinja/Python implicit literal concatenation). No vendored parser
 or other-template semantics change. Test original bytes as input throughout.
 Then separately rerun old flattened BuildMessages after syntax admission to
 prove marker-loss/refusal RED before the content implementation.
+
+Independent oracle further exposes minja empty-map truthiness: Google's
+`if params['properties']` emits `properties:{}` when Jinja omits it. The
+120-case oracle has 30 exact failures after content retention, all containing
+this empty schema. Within the exact-hash source adapter only, qualify the
+properties condition with `| length > 0`, preserving Python truth semantics
+for the source-defined mapping field. No generic engine change or oracle edit.
