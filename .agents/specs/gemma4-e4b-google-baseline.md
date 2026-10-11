@@ -1355,3 +1355,27 @@ Independent oracle further exposes minja empty-map truthiness: Google's
 this empty schema. Within the exact-hash source adapter only, qualify the
 properties condition with `| length > 0`, preserving Python truth semantics
 for the source-defined mapping field. No generic engine change or oracle edit.
+
+### T03A implementation evidence — awaiting root and fresh review
+
+Original JSON -> prompt factory -> minja passes120 independent Jinja byte
+comparisons. Standalone target includes the45 existing template cases and
+three new cases:48 cases/355 assertions, zero skips. Actual direct-source
+closure adds read_only_file_mapping.cpp and existing kv_cache_utils.cpp;
+only vllm_test_main archive, no libvllm/stubs. CTest5/5 also passes loader46/7196,
+audio5/5225, image4/201, vision5/1172. Metadata28 and offline CLI pass;
+runtime_accepted=false. 59 direct header consumers compile with actual flags.
+
+Old-code syntax RED:48 cases/45 passing,132 failed assertions. Syntax-only
+adapter then exposes content RED:96 failed assertions including missing media
+markers and refusal. Empty-schema follow-up RED:30 exact byte failures, fixed
+only in the pinned source adapter. Generator reads no C++ outputs and exact
+regeneration passes. Evidence, commands, setup failures, limitations and actual
+link command: assets/work/2026-10-11-e4b-template/README.md.
+
+All unrelated templates retain flattened strings. Even a whitespace-modified
+Google template is outside identity admission and retains its old parse error.
+Media payload fields remain opaque; only container/type/text shape is validated.
+Programmatic media without retained original content is refused. Raw media,
+T10 full-chain reachability, T03B token parity, T03C parsers, full T02/T03 and
+runtime acceptance remain pending. Full preflight prohibited/PENDING.

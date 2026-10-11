@@ -4856,3 +4856,33 @@ list(REMOVE_ITEM E4B_EXEC_SOURCES vllm/models/test_gemma4_e4b_vision_execution.c
 get_target_property(E4B_EXISTING_SOURCES test_gemma4_e4b_loader SOURCES)
 list(REMOVE_ITEM E4B_EXEC_SOURCES ${E4B_EXISTING_SOURCES})
 target_sources(test_gemma4_e4b_loader PRIVATE ${E4B_EXEC_SOURCES})
+
+# T03A: bounded production renderer/protocol closure, no libvllm or stubs.
+add_executable(test_gemma4_e4b_template
+  vllm/entrypoints/test_gemma4_e4b_template.cpp
+  vllm/entrypoints/test_chat_template.cpp
+  ../src/vllm/entrypoints/chat_template.cpp
+  ../src/vllm/entrypoints/openai/protocol.cpp
+  ../src/vllm/model_executor/model_loader/gguf_reader.cpp
+  ../src/vllm/model_executor/model_loader/read_only_file_mapping.cpp
+  ../src/vllm/v1/core/kv_cache_utils.cpp)
+target_include_directories(test_gemma4_e4b_template PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_gemma4_e4b_template PRIVATE vllm_test_main)
+if(MSVC)
+  target_compile_options(test_gemma4_e4b_template PRIVATE /Gy /Gw)
+  target_link_options(test_gemma4_e4b_template PRIVATE /OPT:REF)
+else()
+  target_compile_options(test_gemma4_e4b_template PRIVATE -ffunction-sections -fdata-sections)
+  if(APPLE)
+    target_link_options(test_gemma4_e4b_template PRIVATE -Wl,-dead_strip)
+  else()
+    target_link_options(test_gemma4_e4b_template PRIVATE -Wl,--gc-sections)
+  endif()
+endif()
+target_compile_definitions(test_gemma4_e4b_template PRIVATE VLLM_TEST_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures")
+vllm_cpp_set_warnings(test_gemma4_e4b_template)
+add_test(NAME test_gemma4_e4b_template COMMAND test_gemma4_e4b_template)
+set_tests_properties(test_gemma4_e4b_template PROPERTIES
+  PASS_REGULAR_EXPRESSION "test cases: +48 [|] +48 passed [|] +0 failed [|] +0 skipped"
+  FAIL_REGULAR_EXPRESSION "Status: FAILURE"
+  ENVIRONMENT "VT_CPU_THREADS=1")
