@@ -1550,3 +1550,34 @@ aggregate148MiB of256MiB; stop at256MiB aggregate or below4GiB free. Reuse
 mutant objects sequentially and preserve fresh-review space. No GPU/network,
 download/install/weights/full library/push/PR/merge/agents/unrelated cleanup.
 Root verification and fresh review follow the committed implementation.
+
+### T03C2 implementation evidence — awaiting root and fresh review
+
+Prospective fcc0b0125 preceded inert overload/test enablement and executable
+RED:9 cases/5276 assertions,12 failed,zero skips. The first 'Sure' delta leaked
+to content in both thinking modes. Compilation/link succeeded with all13 real
+providers and existing assembly regression TU; no stubs or new library closure.
+
+The borrowed nullable overload now prepares once before feed and marks after
+the virtual hook. Reset clears preparation. Gemma scans actual vocabulary IDs,
+resets only its underlying engine and protects initialization. Four-argument
+calls retain their symbol; no untyped parse_delta function-pointer uses were
+found. New virtual/layout changes require consumer rebuilding, not ABI mixing.
+No registry/adapter routing or text-tool branch changed; HTTP is not covered.
+
+Final CTest6/6 passes in403.51s: reasoning15/5416, template48/415,
+loader46/7196, audio5/5225, image4/201 and vision5/1172; all zero skips.
+Reasoning target includes seven new prompt cases and three older assembly
+regressions, which are not new-pin parity claims. Metadata28 and44 actual-flags
+header consumers (including serving and both adapters) pass. Eleven compiled
+mutants fail executable assertions: call removed53, after-feed50, repeated26,
+flag-before-reset-hook2, reset-clear1, initialization-protection4, thinking36,
+and each of four boundaries4. These are implementer sensitivity checks, not
+fresh review. Initial missing configs include and unused mutant parameter were
+harness compile errors, corrected and never counted as RED or mutation kills.
+
+Evidence and exact commands: assets/work/2026-10-11-e4b-prompt-state/README.md.
+All nine retained source hashes match. Resource growth stays below256MiB and
+free disk above4GiB. Full preflight not rerun; T03B/served reasoning/T10,
+original weights and full readiness remain pending. Root rerun and fresh
+independent review are required against the implementation commit.

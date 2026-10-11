@@ -4890,6 +4890,8 @@ set_tests_properties(test_gemma4_e4b_template PROPERTIES
 # Bounded real-provider factory gate; no libvllm or tool-factory substitution.
 add_executable(test_gemma4_e4b_reasoning_end
   vllm/parser/test_gemma4_e4b_reasoning_end.cpp
+  vllm/parser/test_gemma4_e4b_prompt_state.cpp
+  vllm/parser/engine/test_parser_engine_assembly.cpp
   ../src/vllm/parser/parser_manager.cpp
   ../src/vllm/parser/gemma4.cpp
   ../src/vllm/parser/qwen3.cpp
@@ -4919,6 +4921,6 @@ endif()
 vllm_cpp_set_warnings(test_gemma4_e4b_reasoning_end)
 add_test(NAME test_gemma4_e4b_reasoning_end COMMAND test_gemma4_e4b_reasoning_end)
 set_tests_properties(test_gemma4_e4b_reasoning_end PROPERTIES
-  PASS_REGULAR_EXPRESSION "test cases: +5 [|] +5 passed [|] +0 failed [|] +0 skipped"
+  PASS_REGULAR_EXPRESSION "test cases: +15 [|] +15 passed [|] +0 failed [|] +0 skipped"
   FAIL_REGULAR_EXPRESSION "Status: FAILURE"
   ENVIRONMENT "VT_CPU_THREADS=1")

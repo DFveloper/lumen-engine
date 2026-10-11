@@ -25,9 +25,10 @@ namespace vllm::parser {
 class Gemma4Parser : public engine::ParserEngine {
  public:
   explicit Gemma4Parser(const engine::EngineTokenizer* tokenizer = nullptr,
-                        bool thinking = false)
-      : engine::ParserEngine(engine::gemma4_config(), tokenizer),
-        thinking_(thinking) {}
+                        bool thinking = false);
+
+  void adjust_initial_state_from_prompt(
+      const std::vector<int>& prompt_token_ids) override;
 
   bool is_reasoning_end(const std::string& text) const override;
 
@@ -51,6 +52,7 @@ class Gemma4Parser : public engine::ParserEngine {
 
  private:
   bool thinking_;
+  std::vector<int> prompt_boundary_ids_;
 
   // gemma4.py:414-416 per-request state.
   std::string reasoning_text_;

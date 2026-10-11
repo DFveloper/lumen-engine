@@ -2,6 +2,7 @@
 #include "vllm/parser/gemma4.h"
 
 #include <cstddef>
+#include <algorithm>
 
 namespace vllm::parser {
 
@@ -23,10 +24,36 @@ bool starts_with(const std::string& s, const std::string& p) {
 
 }  // namespace
 
+// Pinned a7c23ac96d gemma4.py:418-437,480-526. No synthetic ID fallback.
+Gemma4Parser::Gemma4Parser(const engine::EngineTokenizer* tokenizer, bool thinking)
+    : engine::ParserEngine(engine::gemma4_config(), tokenizer),
+      thinking_(thinking) {
+  if (!tokenizer) return;
+  const auto& vocab = tokenizer->get_vocab();
+  for (const auto* marker : {"<channel|>", "<|tool_call>", "<|turn>",
+                             "<|tool_response>"}) {
+    const auto it = vocab.find(marker);
+    if (it != vocab.end()) prompt_boundary_ids_.push_back(it->second);
+  }
+}
+
+void Gemma4Parser::adjust_initial_state_from_prompt(
+    const std::vector<int>& prompt_token_ids) {
+  if (!reasoning_start_token_id_) return;
+  for (auto it = prompt_token_ids.rbegin(); it != prompt_token_ids.rend(); ++it) {
+    if (*it == *reasoning_start_token_id_) {
+      prepare_streaming_state(engine::ParserState::REASONING);
+      return;
+    }
+    if (std::find(prompt_boundary_ids_.begin(), prompt_boundary_ids_.end(), *it) !=
+        prompt_boundary_ids_.end()) return;
+  }
+}
+
 // Text-literal specialization of a7c23ac96d parser_engine.py:650-674.
 // Gemma's CONTENT -> THINK_START opens reasoning; THINK_END and TOOL_START
 // leave it. The latest of these markers or a turn boundary decides the tail.
-// This does not implement token-ID parity or prompt-state preparation.
+// This text query does not claim original-vocabulary parity.
 bool Gemma4Parser::is_reasoning_end(const std::string& text) const {
   std::size_t latest = std::string::npos;
   bool result = !thinking_;
