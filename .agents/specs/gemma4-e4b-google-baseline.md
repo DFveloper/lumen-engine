@@ -1664,3 +1664,53 @@ review reserve remains intact. No full preflight, serving edits, tokenizer bridg
 request kwargs interpretation, original-token/weight or HTTP claim. T03B/full
 T03/T10 and full readiness remain pending. Root verification and fresh independent
 review must assess the immutable implementation commit before acceptance.
+
+### T03C4 prospective request-aware reasoning construction
+
+ISSUE-LOCAL-01M4PADQGY0M2FCM1TCQVYDZYV owns this bounded repair.
+T03C3 at02a736854 is accepted per rootbg818 (six CPU targets, zero skips,
+28 metadata) and freshreviewd476e952 PASS41/6286, seven compiled mutants and
+nine retained hashes. Review bg826 was a scratch unused-parameter setup failure;
+corrected bg830 supplies the behavioral results, not that failed attempt.
+
+Retained vLLM a7c23ac96d7806e7c7e7d862eadbce5a33529b94 parser/gemma4.py:418-429
+reads kwargs.get('chat_template_kwargs', {}) or {}, then enable_thinking with
+false default; engine/adapters.py forwards kwargs. Interpret JSON values with
+Python truthiness: missing/null/false/numeric zero/empty string/array/object
+are false; nonzero and nonempty values are true, including string 'false'.
+No Kolibri effort rules, boolean-only extraction or new rejection policy.
+ChatCompletionRequest normalization in protocol.cpp retains only outer objects;
+leave it unchanged. Template defaults merge privately in BuildChatPromptFn's
+closure; this slice reads the request, not that merged map. It makes no claim
+of equivalence to server-default template settings.
+
+Add a small production request-aware construction function in its own TU,
+called by OpenAIServingChat::MakeReasoningParser(request). Gemma delegates to
+the accepted explicit-thinking factory; all other names delegate to name-only
+construction. Preserve both existing factory symbols. No tokenizer bridge,
+prompt timing, HTTP loop changes, new virtuals or generic model factory edits.
+Keep Gemma text-tool routing and bare engine-tool exclusion unchanged.
+
+TDD uses test_gemma4_e4b_reasoning_end's 26 real production providers plus the
+new TU, never libvllm, stubs or removed factory branches. Inert API scaffolding
+may delegate the old factory for executable behavioral RED. True/nonempty
+request values must fail through real adapter reasoning-end/tail behavior;
+setup failures do not count. Cover all false/empty values, other-family defaults,
+unknown/disabled names and typed legacy factory access. Derive an independent
+expected JSON truth table with installed Python standard library; synthetic
+text fixtures do not prove original Google vocabulary parity. Compile bounded
+kwargs-ignored/default/truthiness/non-Gemma mutants sequentially.
+
+Final six existing CPU targets require exact counts and no skips, plus28
+metadata tests, actual-flags changed-header consumers (including serving),
+record/anchor/style/trailer/whitespace checks. Max-j2, VT_CPU_THREADS=1,
+external TMPDIR, no network/GPU/download/install/weights/full preflight/library,
+push/PR/merge or agents. Monitor from before RED setup, including shared growth
+and transient files. Entry charge204521975, cap268435456, review reserve20971520,
+writer ceiling247463936; retain an allowance for unsampled transients and stop
+below4GiB free. Evidence: assets/work/2026-10-11-e4b-reasoning-kwargs/README.md.
+
+Claims are actual request-aware construction tested and serving caller wired
+and syntax-compiled, NOT end-to-end HTTP or served reasoning. Full T03B/T03/T10,
+original tokenizer/weights, full preflight and readiness remain false/pending.
+Root exact-SHA verification and separate fresh review follow the code commit.
