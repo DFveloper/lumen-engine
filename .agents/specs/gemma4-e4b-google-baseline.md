@@ -1421,3 +1421,50 @@ Budget remains below256MiB aggregate incremental; free disk above4GiB.
 F1 issue closed for this repair, not scope acceptance. Root verification and
 fresh independent mutation review remain owed. Full T03/T10/runtime, original
 weights and full preflight remain pending; readiness remains false.
+
+### T03C1 Gemma engine reasoning end (prospective)
+
+ISSUE-LOCAL-01M4NZHPAHKSHYK5JPZZ22NM0R owns this bounded repair.
+T03A is accepted at1f8e4a529 per rootbg615 (five CPU targets and28metadata)
+and independent14d27efa:180 oracle rows,12 semantic matches, one refusal and
+nine compiled mutation kills. This does not complete T03.
+
+Port only the text-literal virtual is_reasoning_end contract through the real
+get_parser_engine factory. Pinned a7c23ac96d7806e7c7e7d862eadbce5a33529b94
+vllm/parser/gemma4.py:297-304,418-437 and engine/parser_engine.py:615-674
+are authoritative: CONTENT initially even with thinking; reverse scan returns
+true at channel close or tool start, false at channel opener, and stops at the
+latest turn or tool-response boundary. With no decisive marker in that tail,
+return not thinking. Omitted Gemma thinking is false. Preserve the existing
+true default for every other family with a scoped factory overload, retaining
+the existing explicit bool signature and Gemma tokenizer constructor calls.
+Do not change generic engine semantics or assembly state.
+
+Before product edits, port the retained canonical new-turn test's three
+parameters and capture executable RED for enabled thinking after historical
+completed thought. Add empty/plain tails, both implicit/explicit ends, boundary
+precedence, recent marker precedence and other-family defaults. Exercise the
+base virtual interface returned by the actual factory, not a test substitute.
+Use a synthetic tokenizer, explicitly not original vocabulary. Expected values
+come from retained Python tests/source, never C++ output. Test initial CONTENT
+for both thinking modes. Prove factory-deletion sensitivity with a compiled
+mutation after GREEN. Prompt/streaming tests remain separately owed.
+
+Standalone test_gemma4_e4b_reasoning_end links the13 actual provider TUs listed
+in assets/work/2026-10-11-e4b-parser-sources/README.md plus the test and
+vllm_test_main. Use platform-guarded section GC, no libvllm/stubs or deleted
+factory branches. Resolve missing real providers as harness setup, never RED.
+Run exact-count zero-skip new target, all five existing CPU targets and28metadata;
+syntax-check changed-header consumers with actual compiler flags. Run focused
+record/anchor/style/trailer/whitespace checks, not full preflight.
+
+No prompt hooks, reasoning registry, serving or text-tool parser changes.
+Preserve Gemma serving's deliberate text-tool branch and bare-call support.
+T03B token parity, T03C prompt state and served reasoning, T10, original weights
+and full preflight remain pending; SupportsMmInputs remains false. Missing .env
+is not a CPU-slice blocker. Retain scoped helper role. Evidence goes in
+assets/work/2026-10-11-e4b-reasoning-end with exact commands and resources.
+Max-j2, VT_CPU_THREADS=1, external TMPDIR, Git ceiling assets/work; stop below
+4GiB free or256MiB aggregate campaign growth (about119MiB used at entry).
+No GPU/network/install/download/full-library/push/PR/merge or unrelated cleanup.
+Root verification and fresh independent review follow implementation commit.
