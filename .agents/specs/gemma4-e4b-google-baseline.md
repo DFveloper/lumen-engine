@@ -1019,3 +1019,67 @@ full-library build. Thus full factory resolution/ForwardMm execution is not
 claimed. Evidence/reproduction: assets/work/2026-10-10-e4b-embedding-merge.
 Await root verification and fresh review. T03/T04/T06, production device BF16,
 original oracle, served runtime and full preflight remain pending.
+
+### T04A decoded RGB prerequisite (prospective)
+
+Shared merge is reviewed per rootbg311 + reviewefcd: loader 46/7196,
+frontend 5/5225 and metadata 28 PASS. SupportsMmInputs remains false and
+full factory execution remains unproven. T03 template stays PENDING. This
+prerequisite consumes already-decoded RGB bytes, not messages or placeholders;
+its patch transform has no dependency on template expansion. It does not
+complete T04 or bypass T03 for a full processor/prompt pipeline.
+
+Source audit: Transformers a08ace4bbd97e721c98751deec37d87b026acadc,
+image_processing_gemma4.py::get_aspect_ratio_preserving_size,
+Gemma4ImageProcessor.aspect_ratio_preserving_resize/_preprocess,
+convert_image_to_patches and pad_along_first_dim; image_processing_backends.py::
+TorchvisionBackend.rescale_and_normalize/rescale. Google metadata stays pinned
+to ee0ef6023621cff504d758262d4e04895a5af4a2. Defaults: patch 16, pooling 3,
+280 soft-token budget => 2520 padded patches. Aspect ratio target uses square
+root area scaling then floors each axis to multiples of 48, with thin-axis
+fallback capped at budget*48. No crop. Resize is torchvision tensor BICUBIC
+with antialias=True, NOT shared Pillow's fixed-point bicubic or Qwen's
+non-antialiased algorithm. torchvision is absent locally. Do not install or
+substitute: support exactly the upstream identity-resize branch, refusing
+all other dimensions with an explicit missing antialiased-resize error.
+All five upstream budgets (70,140,280,560,1120) are supported; patch and pooling
+are fixed to checkpoint values. RGB conversion/decoding, batching and optional
+normalization/rescale overrides are outside this decoded uint8 API.
+
+Use the shared HWC uint8 convention with a sized span (exact length checked),
+and reuse ImageKwargs for owned float32 patch storage and grid. Add a Gemma
+result wrapper for xy positions and soft-token count; no Qwen temporal patch
+packing, normalization or BF16 cast. Patch rows are raster y,x; within each
+row pixels are y,x,channel. Multiply by float32 1/255; do not pre-apply the
+tower's 2*(x-.5). Padding is float zero and (-1,-1); there is no upstream
+separate attention mask. Positions define the tower's contiguous valid prefix,
+with soft-token count valid_patches/9 (not always the budget).
+
+Extract the existing tower valid-prefix input boundary into a shared callable
+validator used by the actual Gemma4VisionForward and tests. Validate shapes,
+finite [0,1] values, raster xy positions, pooling divisibility and zero trailing
+padding before the tower creates a queue. This provides processor-to-actual
+input-contract coverage, not backend queue/tower numerical inference. Preserve
+existing shared image callers without altering their layouts or resampler.
+Explicit bounds: decoded dimensions <= 65536 and <= 64 Mi pixels; reject
+nonpositive, mismatched length, overflow-sized dimensions, unsupported budgets
+and required resize before allocating output. Output max ~31 MiB at 1120.
+
+Fresh executable RED after this spec commit must fail valid identity inputs
+through the production processor interface, not compilation/linking. Then
+implement, retaining independent scalar patch expectations and pinned source
+geometry fixtures, including portrait/landscape, all budgets, exact values,
+layout, padding/mask/count, malformed and unsupported inputs. Port applicable
+upstream test_image_processing_gemma4.py tests (defaults/budgets/positions/zero
+padding); generalized patch/pooling, full resize, PIL/numpy/tensor wrappers and
+batch tests are deferred, not silently skipped. No production inference claim.
+
+Use new named CPU real-TU target, -j2, external TMPDIR/Git ceiling in
+assets/work/2026-10-10-e4b-image-preprocessing, <=256 MiB incremental scratch,
+stop below 4 GiB free. Retain loader 46/7196, frontend 5/5225, metadata 28.
+Check actual-command header consumers, records, anchors, style and trailers.
+Full preflight explicitly prohibited by current task (PENDING, not waived),
+no GPU/weights/install/full-library/remote/push/PR/merge. Commit runnable code
+and hand immutable SHA to root for verification and fresh independent review.
+Original vision execution, video, template, oracle and served-runtime gates
+remain pending. Open milestone ISSUE-LOCAL-01M4KSETGY63TDEDPF6EHQHRA8 unchanged.
