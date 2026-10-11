@@ -1633,3 +1633,34 @@ registry/ABC reach, not served prompt integration. MODEL-MM-gemma4-mm-gemma4-for
 owns the remaining wiring under this spec's T03/T10 scope. Full T03/T03B/T10,
 original weights and full preflight remain owed; readiness remains false.
 Root verification and fresh independent review follow the implementation commit.
+
+### T03C3 implementation evidence — awaiting root and fresh review
+
+Prospective5fdbca989 preceded actual-provider linking and both executable REDs.
+Registry RED:16 cases/5431 assertions,2 failures,zero skips. With registration
+working and an inert hook, forwarding RED:17/5440,4 failures,zero skips;
+first Sure was content in both modes. No setup failure counted as RED.
+
+The actual factory now constructs Gemma4ParserReasoningAdapter, defaults false,
+and accepts explicit thinking plus borrowed tokenizer context. ABC forwarding
+is direct and caller-timed. Existing extraction and skip guard remain unchanged.
+The old factory symbol remains; typed address-taking is tested. No existing
+untyped factory address-taking was found; new overloads and virtuals require
+consumer rebuilding and are not a binary-compatibility promise.
+
+Final six CPU targets pass in400.51 seconds, zero skips: reasoning37/5789,
+template48/415, loader46/7196, audio5/5225, image4/201, vision5/1172.
+Metadata28 passes,53 actual-flags header consumers compile, nine source hashes
+match, and record/anchor checks pass. Existing Qwen3/Kolibri and assembly tests
+are older-pin regression coverage, not new-pin parity. Real closure adds13
+reasoning TUs to the existing13 providers, without libvllm/stubs or duplicated
+provider targets. Four compiled scratch mutants fail assertions: substituted
+registration1, removed forwarding24, disabled skip guard28, missing restoration2.
+These are writer sensitivity checks; fresh independent review remains owed.
+
+Evidence and exact commands: assets/work/2026-10-11-e4b-reasoning-adapter/README.md.
+Resource monitoring includes shared build growth, scratch and transient files;
+review reserve remains intact. No full preflight, serving edits, tokenizer bridge,
+request kwargs interpretation, original-token/weight or HTTP claim. T03B/full
+T03/T10 and full readiness remain pending. Root verification and fresh independent
+review must assess the immutable implementation commit before acceptance.
