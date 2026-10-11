@@ -1286,3 +1286,56 @@ Build106MiB versus initial74, execution22, review19, repair5: incremental78MiB
 of256MiB; disk13GiB free, -j2, external TMPDIR/Git ceiling. Full preflight
 prohibited/PENDING. SupportsMmInputs remains false; full factory, original
 shape/checkpoint, full HF, general theta, T03, video and runtime remain pending.
+
+### Reconciled vision repair acceptance
+
+Root rootbg480 PASS: loader46/7196 audio5/5225 image4/201 vision5/1172 and metadata28. Independent29b61b94 PASS: pool-no-round one failure, oversized Q/K/V/O four failures, connector dtype one failure; actual pinned HF fixture exact. Evidence: assets/work/2026-10-10-e4b-vision-repair-review/README.md. Scoped coverage acceptance only; T02/T03/runtime and full preflight remain pending.
+
+### T03A original Google rendering (prospective)
+
+Issue: ISSUE-LOCAL-01M4NT3N9NX3RT6JX11S8RCA0Y. Reuse the existing
+protocol -> MakeChatTemplatePromptFn -> minja renderer, not a new renderer.
+Google checkpoint ee0ef6023621cff504d758262d4e04895a5af4a2 fixture
+tests/fixtures/gemma4_e4b_google/chat_template.jinja has SHA256
+0a2c8073c878ab1da004bee933a998606537bbb62016310352c7285c3f01c5b5.
+Its captured_content and tool_body branches consume ordered typed arrays.
+The retained vLLM renderer tests target examples/tool_chat_template_gemma4.jinja,
+not this original: their empty thought-channel expectations must not replace
+Google bytes. Use installed Jinja2 3.1.2 ImmutableSandboxedEnvironment with
+trim_blocks/lstrip_blocks true, keep_trailing_newline false, no autoescape.
+Generate expected bytes independently of C++ using this exact fixture.
+
+Bounded compatibility policy: select this one template by full SHA256 using
+the existing sha256_bytes utility, once at parse. Changed templates and all
+other models retain their existing flattened-string adapter byte behavior.
+No general content-format detector or new API switch. Preserve original wire
+content separately during decoding without changing processor content_parts.
+Only the selected adapter validates structure: strings/null or arrays of text,
+image/image_url, audio/input_audio, video objects as the Google template names.
+Bare string elements normalize to text (existing protocol convention). Text
+requires a string; unknown types, non-object elements, scalar content and
+media in system/developer arrays fail explicitly instead of disappearing.
+Media payload fields remain opaque and unchanged: rendering is not media
+validation, fetching, token expansion, or a claim of supported wire video/audio
+processing. No invented audio_url/video_url mapping. Retain reasoning_content
+as a scoped fallback to reasoning, as the Google source does.
+
+Test real JSON request decode and prompt factory against generated exact bytes:
+strings, system/developer, assistant/tool continuations, multiple tools, nested
+and escaped arguments, thinking unset/false/true, historical reasoning, ordered
+image/audio/video/mixed/tool media. Cover scoped refusal and other-template
+compatibility. Reuse existing test_chat_template TU in standalone target if
+bounded linkage permits. Direct-source test_gemma4_e4b_template links actual
+chat_template.cpp, protocol.cpp, gguf_reader.cpp, hash utility and vllm_test_main
+with section GC; no libvllm, wholearchive, fake symbols or shared stub.
+Capture executable RED before product edits, then exact-count/no-skip GREEN.
+
+Production callers remain server_main, serving_chat and C API chat_prompt via
+MakeChatTemplatePromptFn. This proves their shared renderer, not full serving:
+T10 full-chain execution/mutations remain owed. No readiness, raw processing,
+tokenizer, parser or C ABI fallback changes. T03B missing vocabulary/token
+parity and T03C parsers remain pending; full T03 and runtime are not complete.
+Full preflight prohibited/PENDING, missing .env does not block CPU slice.
+Use existing build, max -j2, VT_CPU_THREADS=1, external TMPDIR and Git ceiling.
+Stop below 4GiB free or 256MiB incremental build plus scratch; no GPU/network/
+install/weights/push/merge or cleanup. Root rerun and fresh review required.
