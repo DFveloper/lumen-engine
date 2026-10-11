@@ -1581,3 +1581,55 @@ All nine retained source hashes match. Resource growth stays below256MiB and
 free disk above4GiB. Full preflight not rerun; T03B/served reasoning/T10,
 original weights and full readiness remain pending. Root rerun and fresh
 independent review are required against the implementation commit.
+
+### T03C3 reasoning registry and adapter (prospective)
+
+ISSUE-LOCAL-01M4P2X9JQ50HW5D9JMYDS7MF5 owns this bounded slice.
+T03C2 accepted at c79b3f120 per rootbg7416 (six CPU targets and28 metadata)
+and reviewer153f803a PASS: baseline15/5416, probes17/10632,12 mutants,
+44 header consumers and nine retained hashes. T03A/C1 remain accepted.
+
+Pinned a7c23ac96d7806e7c7e7d862eadbce5a33529b94 reasoning/__init__.py:55-58,
+engine/registered_adapters.py:43-46, adapters.py:68-69 and gemma4.py:418-435
+require Gemma4 registration, default thinking false and direct prompt forwarding.
+Add Gemma4ParserReasoningAdapter and one enumeration entry. Preserve the old
+name-only factory symbol and other-family defaults. Add an explicit bool and
+borrowed EngineTokenizer factory overload for Gemma only; other names retain
+the name-only construction policy. Tokenizer lifetime must cover the engine.
+Add a public virtual default-noop ABC prompt hook, forwarding directly through
+ParserEngineReasoningAdapter. Prompt vectors are borrowed only during the call.
+Caller owns once-only invocation; do not use parse_delta's preparation flag.
+Preserve extraction through extract_reasoning_streaming and skip-tool guard.
+Request kwargs interpretation remains owed; do not borrow Kolibri effort rules.
+New virtuals require rebuilding consumers; overloads can make untyped function
+address-taking ambiguous. No binary compatibility guarantee is made.
+
+First establish actual-provider link closure on the existing reasoning-end
+target, reusing its13 providers and adding the actual reasoning factory closure.
+No libvllm, stubs or deleted factory branches. Missing dependencies are setup,
+not RED. Capture registry resolution/enumeration RED, then independently capture
+ABC prompt forwarding RED with a synthetic open prompt and first small Sure
+before a closer, both thinking modes. An inert compatible hook/context overload
+is permitted as test enablement. Registration failure must not mask that RED.
+Port retained TestAdapterExtractReasoning1112-1150 expectations independently.
+Cover tool text, skip flag restoration, content-only output, boundaries, missing
+IDs/null tokenizer, initialization protection, prefixes and other families.
+Already-correct behavior is regression coverage, not a newly invented bug;
+compiled mutations qualify sensitivity of registration, forwarding and skip guard.
+Synthetic vocabulary is not original Google vocabulary.
+
+Final gate: six existing CPU targets with exact counts and no skips,28 metadata,
+actual-flags changed-header consumers, record/anchor/style/trailer/whitespace.
+Full preflight prohibited/PENDING. Reuse build-cpu, max-j2, VT_CPU_THREADS=1,
+external TMPDIR and Git ceiling assets/work. Campaign entry charge182346092
+of268435456 bytes; reserve20971520 for independent review. Measure build growth,
+scratch and transient link peak; stop below4GiB free or writer ceiling247463936.
+Evidence: assets/work/2026-10-11-e4b-reasoning-adapter/README.md.
+No GPU/network/download/weights/install/full-library/push/PR/merge/agents.
+
+Serving MakeReasoningParser/callers, Gemma text-tool selection and engine-tool
+exclusion, tokenizer bridge and HTTP loops stay unchanged. This is staged
+registry/ABC reach, not served prompt integration. MODEL-MM-gemma4-mm-gemma4-for-conditional-generation
+owns the remaining wiring under this spec's T03/T10 scope. Full T03/T03B/T10,
+original weights and full preflight remain owed; readiness remains false.
+Root verification and fresh independent review follow the implementation commit.
