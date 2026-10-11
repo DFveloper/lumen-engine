@@ -546,7 +546,7 @@ Gemma4AudioAttention, Gemma4AudioLightConv1d, Gemma4ClippableLinear and
 Gemma4AudioModel define the following inventory. configuration_gemma4.py::
 Gemma4AudioConfig defines defaults. Local source artifacts are in
 assets/work/2026-10-10-e4b-vision and -vision-clipping; pinned vLLM
-planning/e4b/sources/gemma4_mm.py constructs the Transformers audio tower and
+planning/e4b/sources/vllm-gemma4_mm.py constructs the Transformers audio tower and
 maps model.audio_tower to audio_tower. The existing downloaded header is
 assets/work/2026-10-10-e4b-vision-clipping/header.json (no payload read).
 
@@ -606,3 +606,39 @@ pending and prohibited in this bounded task. Commit implementation then request
 root verification and independent review. Encoder hooks, preprocessing,
 production device BF16, numeric/runtime acceptance and original-checkpoint
 execution remain owed even if all 751 tensors can be retained.
+
+### Complete audio inventory verification
+
+Both decoder entrypoints now call LoadAudioBlocks after their shared frontend
+loader. The existing audio_frontend_weights owns all tower vectors; its name is
+historical. Optional audio_config retains validated block/output fields and full
+JSON stays on audio.config. No separate disconnected inventory container or
+execution hook was introduced. BF16-only matrices, norms, scale, bias and bounds
+are exactly widened without layout changes. Disabled bounds use true infinity.
+
+Corrected red: 36 cases, all original 34 passing; 757 failed assertions out of
+3761. The initial malformed-shape fixture changed byte count and was rejected by
+the safetensors reader; appending a singleton dimension preserves byte count
+and reaches the actual loader shape guard. The old frontend empty-block checks
+were retained for that red, then changed to require the newly retained layers.
+Final green: 41 cases / 6866 assertions, zero skips, exact-count CTest 1/1 PASS.
+Two layers have distinct matrix/norm/scale/bias elements and every clipping
+bound; a separate tiny twelve-layer fixture tests source layer/head defaults.
+Every one of the 126 block/output tensors in the two-layer fixture is tested
+missing, wrong rank and wrong dtype through both overloads. Every bound gets
+NaN rejection, every pair gets reversed-order rejection, and disabled/infinite/
+equal bounds pass. Config tests cover defaults, overrides, type/numeric refusal,
+F32 narrowing and checked size/context overflow before block lookup/allocation.
+
+Nine prior direct header consumers plus the audio source and audio tower test
+pass syntax checks using actual compile_commands flags. All 28 metadata tests,
+offline CLI, record and symbol-anchor checks pass. Evidence and reproduction
+commands: assets/work/2026-10-10-e4b-audio-blocks. The reused CPU target alone was
+built with -j2; scratch is below 1 MiB and reused build below 70 MiB; free disk
+remains above 13 GiB. Full preflight was not run and remains pending.
+
+The 744 block plus two output tensors complete the source inventory of 751
+including the frontend, but no original checkpoint payload was loaded. T02
+remains PARTIAL. Production BF16, encoder hooks, preprocessing, numerical gates
+and original-checkpoint runtime acceptance remain pending. Root rerun and fresh
+independent review of the implementation commit are required.

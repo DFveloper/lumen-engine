@@ -438,6 +438,134 @@ void LoadAudioFrontend(const TensorResolver& get, Gemma4Weights& w) {
   w.audio_frontend_config = c;
 }
 
+// Transformers a08ace4b Gemma4Audio{Layer,Model,Config}. This is owned
+// host-F32 reference storage widened from the header's BF16, not device execution.
+void LoadAudioBlocks(const TensorResolver& get, Gemma4Weights& w, int64_t text_hidden) {
+  const auto& cfg = w.audio.config;
+  if (cfg.is_null()) return;
+  multimodal::Gemma4AudioConfig c;
+  const auto integer = [&](const char* key, int64_t fallback, bool zero = false) {
+    const auto v = cfg.value(key, nlohmann::json(fallback));
+    VT_CHECK(v.is_number_integer() && v >= (zero ? 0 : 1) && v <= INT64_MAX,
+             std::string("gemma4: audio_config ") + key + " invalid integer");
+    return v.get<int64_t>();
+  };
+  const auto number = [&](const char* key, double fallback, bool positive) {
+    const auto v = cfg.value(key, nlohmann::json(fallback));
+    VT_CHECK(v.is_number() && std::isfinite(v.get<double>()) &&
+                 std::isfinite(static_cast<float>(v.get<double>())) &&
+                 (!positive || static_cast<float>(v.get<double>()) > 0),
+             std::string("gemma4: audio_config ") + key + " invalid finite F32 value");
+    return static_cast<float>(v.get<double>());
+  };
+  c.hidden_size = w.audio_frontend_config->hidden_size;
+  c.sub_ch0 = w.audio_frontend_config->sub_ch0;
+  c.sub_ch1 = w.audio_frontend_config->sub_ch1;
+  c.rms_norm_eps = w.audio_frontend_config->rms_norm_eps;
+  c.text_hidden_size = text_hidden;
+  c.num_layers = integer("num_hidden_layers", 12);
+  c.num_heads = integer("num_attention_heads", 8);
+  c.head_dim = c.hidden_size / c.num_heads;
+  VT_CHECK(c.head_dim > 0, "gemma4: audio_config num_attention_heads exceeds hidden_size");
+  c.conv_kernel_size = integer("conv_kernel_size", 5);
+  c.chunk_size = integer("attention_chunk_size", 12);
+  c.context_left = integer("attention_context_left", 13);
+  c.context_right = integer("attention_context_right", 0, true);
+  VT_CHECK(c.context_left - 1 <= INT64_MAX - c.chunk_size &&
+               c.context_right <= INT64_MAX - c.chunk_size - (c.context_left - 1),
+           "gemma4: audio_config attention context overflow");
+  c.residual_weight = number("residual_weight", 0.5, false);
+  c.attention_logit_cap = number("attention_logit_cap", 50, true);
+  c.attention_invalid_logits_value = number("attention_invalid_logits_value", -1e9, false);
+  c.gradient_clipping = number("gradient_clipping", 1e10, true);
+  const auto act = cfg.value("hidden_act", nlohmann::json("silu"));
+  VT_CHECK(act.is_string(), "gemma4: audio_config hidden_act must be a string");
+  c.hidden_act = act.get<std::string>(); // retention only; no activation dispatch here
+  const auto clipped = cfg.value("use_clipped_linears", nlohmann::json(true));
+  VT_CHECK(clipped.is_boolean(), "gemma4: audio_config use_clipped_linears must be boolean");
+  c.use_clipped_linears = clipped.get<bool>();
+  c.output_proj_dims = c.hidden_size;
+  if (cfg.contains("output_proj_dims") && !cfg.at("output_proj_dims").is_null() &&
+      cfg.at("output_proj_dims") != 0)
+    c.output_proj_dims = integer("output_proj_dims", c.hidden_size);
+  const auto count = [](std::initializer_list<int64_t> dims) {
+    uint64_t n = 1;
+    for (auto d : dims) {
+      VT_CHECK(d > 0 && n <= static_cast<uint64_t>(INT64_MAX) / 4 / d &&
+                   n <= SIZE_MAX / sizeof(float) / static_cast<uint64_t>(d),
+               "gemma4: audio_config block tensor size overflow");
+      n *= d;
+    }
+    return n;
+  };
+  const auto h = c.hidden_size;
+  count({4,h,h,c.num_layers}); // includes expansion and all layer sizes before allocation
+  count({h,1,c.conv_kernel_size,c.num_layers});
+  count({c.output_proj_dims,h});
+  count({c.num_layers,static_cast<int64_t>(sizeof(multimodal::Gemma4AudioLayerWeights))});
+  const auto load = [&](const std::string& name, const std::vector<int64_t>& shape) {
+    const auto& t = get(name);
+    VT_CHECK(t.shape == shape, "gemma4: " + name + " incorrect shape");
+    VT_CHECK(t.dtype == "BF16", "gemma4: " + name + " requires BF16");
+    const auto owned = LoadBf16Direct(get, name);
+    std::vector<float> values(owned.bytes.size()/2);
+    for (size_t i=0;i<values.size();++i) {
+      uint16_t bits; std::memcpy(&bits,owned.bytes.data()+2*i,2);
+      values[i]=vt::BF16ToF32(bits);
+    }
+    return values;
+  };
+  const auto linear = [&](const std::string& name, int64_t out, int64_t in) {
+    multimodal::ClipLinear v;
+    v.w = load(name+".linear.weight",{out,in});
+    if(c.use_clipped_linears) {
+      const auto bound = [&](const char* suffix) {
+        const auto full=name+suffix;
+        const auto f=load(full,{}).at(0);
+        VT_CHECK(!std::isnan(f), "gemma4: " + full + " must not be NaN");
+        return f;
+      };
+      v.clip.in_min=bound(".input_min"); v.clip.in_max=bound(".input_max");
+      v.clip.out_min=bound(".output_min"); v.clip.out_max=bound(".output_max");
+      VT_CHECK(v.clip.in_min<=v.clip.in_max, "gemma4: "+name+" input_min exceeds input_max");
+      VT_CHECK(v.clip.out_min<=v.clip.out_max, "gemma4: "+name+" output_min exceeds output_max");
+    }
+    return v;
+  };
+  auto& a=w.audio_frontend_weights;
+  a.layers.resize(c.num_layers);
+  for(int64_t i=0;i<c.num_layers;++i) {
+    const auto p="model.audio_tower.layers."+std::to_string(i)+".";
+    auto& l=a.layers[i];
+    const auto ff = [&](const char* suffix, multimodal::Gemma4AudioFFWeights& f) {
+      const auto n=p+suffix;
+      f.ffw1=linear(n+".ffw_layer_1",4*h,h);
+      f.ffw2=linear(n+".ffw_layer_2",h,4*h);
+      f.pre_ln=load(n+".pre_layer_norm.weight",{h});
+      f.post_ln=load(n+".post_layer_norm.weight",{h});
+    };
+    ff("feed_forward1",l.ff1); ff("feed_forward2",l.ff2);
+    const auto q=c.num_heads*c.head_dim;
+    l.attn.q_proj=linear(p+"self_attn.q_proj",q,h);
+    l.attn.k_proj=linear(p+"self_attn.k_proj",q,h);
+    l.attn.v_proj=linear(p+"self_attn.v_proj",q,h);
+    l.attn.post=linear(p+"self_attn.post",h,h);
+    l.attn.relative_k_proj=load(p+"self_attn.relative_k_proj.weight",{q,h});
+    l.attn.per_dim_scale=load(p+"self_attn.per_dim_scale",{c.head_dim});
+    l.lconv.linear_start=linear(p+"lconv1d.linear_start",2*h,h);
+    l.lconv.linear_end=linear(p+"lconv1d.linear_end",h,h);
+    l.lconv.depthwise=load(p+"lconv1d.depthwise_conv1d.weight",{h,1,c.conv_kernel_size});
+    l.lconv.pre_ln=load(p+"lconv1d.pre_layer_norm.weight",{h});
+    l.lconv.conv_norm=load(p+"lconv1d.conv_norm.weight",{h});
+    l.norm_pre_attn=load(p+"norm_pre_attn.weight",{h});
+    l.norm_post_attn=load(p+"norm_post_attn.weight",{h});
+    l.norm_out=load(p+"norm_out.weight",{h});
+  }
+  a.output_proj_w=load("model.audio_tower.output_proj.weight",{c.output_proj_dims,h});
+  a.output_proj_b=load("model.audio_tower.output_proj.bias",{c.output_proj_dims});
+  w.audio_config=std::move(c);
+}
+
 // Pinned Transformers a08ace4b modeling_gemma4.py:579-588.
 // This retains patch inventory; encoder/hook wiring remains owed.
 multimodal::Gemma4VisionWeights LoadVisionPatches(
@@ -697,6 +825,7 @@ Gemma4Weights LoadImpl(const std::vector<SafetensorsFile>& shards,
   w.vision = LoadModalityProjector(get, config, "vision_config", "model.embed_vision", false);
   w.audio = LoadModalityProjector(get, config, "audio_config", "model.embed_audio", true);
   LoadAudioFrontend(get, w);
+  LoadAudioBlocks(get, w, H);
   w.vision_patch_weights = LoadVisionPatches(get, w.vision.config);
   LoadVisionBlocks(get, w.vision.config, w.vision_patch_weights);
   if (!w.vision.config.is_null()) {

@@ -3,6 +3,7 @@
 // reduced to avoid allocating the original vocabulary and PLE tables.
 #include <doctest/doctest.h>
 #include <filesystem>
+#include <functional>
 #include <cmath>
 #include <limits>
 #include <cstring>
@@ -229,13 +230,92 @@ std::vector<AudioEntry> audio_inventory(int64_t h = 4, int64_t a = 4, int64_t b 
           {"input_proj_linear.weight", {h,(a/4)*b}, &Audio::input_proj}};
 }
 const std::string audio_prefix = "model.audio_tower.subsample_conv_projection.";
+using AL = vllm::multimodal::Gemma4AudioLayerWeights;
+struct AE { std::string name; std::vector<int64_t> shape;
+  std::function<const std::vector<float>&(const AL&)> get; };
+std::vector<AE> ai(int64_t h=4, int64_t heads=2) {
+  const auto q=(h/heads)*heads;
+  return {
+    {"feed_forward1.ffw_layer_1.linear.weight",{4*h,h},[](const AL& a)->const std::vector<float>& { return a.ff1.ffw1.w; }},
+    {"feed_forward1.ffw_layer_2.linear.weight",{h,4*h},[](const AL& a)->const std::vector<float>& { return a.ff1.ffw2.w; }},
+    {"feed_forward1.pre_layer_norm.weight",{h},[](const AL& a)->const std::vector<float>& { return a.ff1.pre_ln; }},
+    {"feed_forward1.post_layer_norm.weight",{h},[](const AL& a)->const std::vector<float>& { return a.ff1.post_ln; }},
+    {"feed_forward2.ffw_layer_1.linear.weight",{4*h,h},[](const AL& a)->const std::vector<float>& { return a.ff2.ffw1.w; }},
+    {"feed_forward2.ffw_layer_2.linear.weight",{h,4*h},[](const AL& a)->const std::vector<float>& { return a.ff2.ffw2.w; }},
+    {"feed_forward2.pre_layer_norm.weight",{h},[](const AL& a)->const std::vector<float>& { return a.ff2.pre_ln; }},
+    {"feed_forward2.post_layer_norm.weight",{h},[](const AL& a)->const std::vector<float>& { return a.ff2.post_ln; }},
+    {"self_attn.q_proj.linear.weight",{q,h},[](const AL& a)->const std::vector<float>& { return a.attn.q_proj.w; }},
+    {"self_attn.k_proj.linear.weight",{q,h},[](const AL& a)->const std::vector<float>& { return a.attn.k_proj.w; }},
+    {"self_attn.v_proj.linear.weight",{q,h},[](const AL& a)->const std::vector<float>& { return a.attn.v_proj.w; }},
+    {"self_attn.post.linear.weight",{h,h},[](const AL& a)->const std::vector<float>& { return a.attn.post.w; }},
+    {"self_attn.relative_k_proj.weight",{q,h},[](const AL& a)->const std::vector<float>& { return a.attn.relative_k_proj; }},
+    {"self_attn.per_dim_scale",{h/heads},[](const AL& a)->const std::vector<float>& { return a.attn.per_dim_scale; }},
+    {"lconv1d.linear_start.linear.weight",{2*h,h},[](const AL& a)->const std::vector<float>& { return a.lconv.linear_start.w; }},
+    {"lconv1d.linear_end.linear.weight",{h,h},[](const AL& a)->const std::vector<float>& { return a.lconv.linear_end.w; }},
+    {"lconv1d.depthwise_conv1d.weight",{h,1,5},[](const AL& a)->const std::vector<float>& { return a.lconv.depthwise; }},
+    {"lconv1d.pre_layer_norm.weight",{h},[](const AL& a)->const std::vector<float>& { return a.lconv.pre_ln; }},
+    {"lconv1d.conv_norm.weight",{h},[](const AL& a)->const std::vector<float>& { return a.lconv.conv_norm; }},
+    {"norm_pre_attn.weight",{h},[](const AL& a)->const std::vector<float>& { return a.norm_pre_attn; }},
+    {"norm_post_attn.weight",{h},[](const AL& a)->const std::vector<float>& { return a.norm_post_attn; }},
+    {"norm_out.weight",{h},[](const AL& a)->const std::vector<float>& { return a.norm_out; }},
+  };
+}
+std::vector<std::pair<std::string,const vllm::multimodal::AClip*>> audio_clips(const AL& a) {
+ return {
+  {"feed_forward1.ffw_layer_1",&a.ff1.ffw1.clip},
+  {"feed_forward1.ffw_layer_2",&a.ff1.ffw2.clip},
+  {"feed_forward2.ffw_layer_1",&a.ff2.ffw1.clip},
+  {"feed_forward2.ffw_layer_2",&a.ff2.ffw2.clip},
+  {"self_attn.q_proj",&a.attn.q_proj.clip},
+  {"self_attn.k_proj",&a.attn.k_proj.clip},
+  {"self_attn.v_proj",&a.attn.v_proj.clip},
+  {"self_attn.post",&a.attn.post.clip},
+  {"lconv1d.linear_start",&a.lconv.linear_start.clip},
+  {"lconv1d.linear_end",&a.lconv.linear_end.clip},
+ };
+}
+void add_blocks(Fixture& f, int64_t h=4, int layers=2, int heads=2) {
+  AL empty;
+  for(int l=0;l<layers;++l) {
+    const auto p="model.audio_tower.layers."+std::to_string(l)+".";
+    int id=0;
+    for(const auto& e:ai(h,heads)) {
+      f.add(p+e.name,e.shape);
+      const auto start=f.header[p+e.name]["data_offsets"][0].get<size_t>();
+      size_t n=1; for(auto d:e.shape)n*=d;
+      for(size_t i=0;i<n;++i) {uint16_t bits=0x3000+l*1024+id++;
+        std::memcpy(f.bytes.data()+start+2*i,&bits,2);}
+    }
+    int ci=0;
+    for(const auto& e:audio_clips(empty)) {
+      int bi=0;
+      for(const auto* b:{"input_min","input_max","output_min","output_max"}) {
+        const auto name=p+e.first+"."+b; f.add(name,{});
+        uint16_t bits=0x3e00+l*128+ci*4+bi++;
+        auto start=f.header[name]["data_offsets"][0].get<size_t>();
+        std::memcpy(f.bytes.data()+start,&bits,2);
+      }
+      ++ci;
+    }
+  }
+  f.add("model.audio_tower.output_proj.weight",{h==4?5:h,h});
+  f.add("model.audio_tower.output_proj.bias",{h==4?5:h});
+  int oi=0;
+  for(auto name:{"model.audio_tower.output_proj.weight","model.audio_tower.output_proj.bias"}) {
+    auto start=f.header[name]["data_offsets"][0].get<size_t>();
+    auto end=f.header[name]["data_offsets"][1].get<size_t>();
+    for(auto off=start;off<end;off+=2) {uint16_t bits=0x4200+oi++;
+      std::memcpy(f.bytes.data()+off,&bits,2);}
+  }
+}
 void add_audio(Fixture& f, int64_t h, int64_t a = 128, int64_t b = 32) {
   for (const auto& e : audio_inventory(h,a,b)) f.add(audio_prefix + e.name, e.shape);
+  add_blocks(f,h);
 }
 vllm::HfConfig audio_config() {
   auto c = config();
   c.raw["audio_config"] = {{"hidden_size",4},{"output_proj_dims",5},
-      {"rms_norm_eps",0.0001},{"subsampling_conv_channels",{4,2}}};
+      {"num_hidden_layers",2},{"num_attention_heads",2},{"rms_norm_eps",0.0001},{"subsampling_conv_channels",{4,2}}};
   return c;
 }
 void reject_mm(Fixture& f, const vllm::HfConfig& c, const std::string& diagnostic) {
@@ -738,8 +818,8 @@ TEST_CASE("E4B audio frontend: owned contents layout and configuration") {
       }
       ++tensor;
     }
-    CHECK(w.audio_frontend_weights.layers.empty());
-    CHECK(w.audio_frontend_weights.output_proj_w.empty());
+    CHECK(w.audio_frontend_weights.layers.size()==2);
+    CHECK(w.audio_frontend_weights.output_proj_w.size()==20);
   }
 }
 TEST_CASE("E4B audio frontend: missing malformed and wrong dtype inventory") {
@@ -804,4 +884,186 @@ TEST_CASE("E4B audio frontend: absent and source default channels") {
       CHECK(w.audio_frontend_config->sub_ch1==32); CHECK(w.audio_frontend_config->input_width==1024); }
     else CHECK(w.audio_frontend_weights.sub0_conv.empty());
   }
+}
+
+TEST_CASE("E4B audio blocks: complete owned inventory and exact widening") {
+ for(bool owned:{false,true}) {
+  vllm::Gemma4Weights w;
+  { Fixture f; add_audio(f,4,4,2); f.add(audio_proj,{2,5}); auto c=audio_config();
+    auto shards=f.open();
+    if(owned) w=vllm::LoadGemma4ForConditionalGenerationWeightsOwned(
+      std::make_shared<const std::vector<vllm::SafetensorsFile>>(std::move(shards)),c);
+    else w=vllm::LoadGemma4ForConditionalGenerationWeights(shards,c);
+  }
+  w.shards_keepalive.reset();
+  REQUIRE(w.audio_frontend_weights.layers.size()==2);
+  for(int l=0;l<2;++l) {
+    const auto& a=w.audio_frontend_weights.layers[l]; int id=0;
+    for(const auto& e:ai()) {
+      size_t n=1;for(auto d:e.shape)n*=d; REQUIRE(e.get(a).size()==n);
+      for(auto v:e.get(a)) {uint32_t bits=uint32_t(0x3000+l*1024+id++)<<16;
+        float expected;std::memcpy(&expected,&bits,4);CHECK(v==expected);}
+    }
+    int ci=0;
+    for(const auto& e:audio_clips(a)) {int bi=0;
+      for(auto v:{e.second->in_min,e.second->in_max,e.second->out_min,e.second->out_max}) {
+        uint32_t bits=uint32_t(0x3e00+l*128+ci*4+bi++)<<16;float expected;
+        std::memcpy(&expected,&bits,4);CHECK(v==expected);}
+      ++ci;
+    }
+  }
+  REQUIRE(w.audio_frontend_weights.output_proj_w.size()==20);
+  REQUIRE(w.audio_frontend_weights.output_proj_b.size()==5);
+  int oi=0;
+  for(const auto* values:{&w.audio_frontend_weights.output_proj_w,&w.audio_frontend_weights.output_proj_b})
+    for(float v:*values) {uint32_t bits=uint32_t(0x4200+oi++)<<16;float expected;
+      std::memcpy(&expected,&bits,4);CHECK(v==expected);}
+  REQUIRE(w.audio_config);const auto& c=*w.audio_config;
+  CHECK(c.num_layers==2);CHECK(c.num_heads==2);CHECK(c.head_dim==2);
+  CHECK(c.hidden_size==4);CHECK(c.output_proj_dims==5);CHECK(c.text_hidden_size==2);
+  CHECK(c.conv_kernel_size==5);CHECK(c.chunk_size==12);CHECK(c.context_left==13);
+  CHECK(c.context_right==0);CHECK(c.residual_weight==0.5f);
+  CHECK(c.attention_logit_cap==50);CHECK(c.attention_invalid_logits_value==-1e9f);
+  CHECK(c.gradient_clipping==1e10);CHECK(c.hidden_act=="silu");CHECK(c.use_clipped_linears);
+  CHECK(c.sub_ch0==4);CHECK(c.sub_ch1==2);CHECK(c.rms_norm_eps==0.0001f);
+ }
+}
+TEST_CASE("E4B audio blocks: every tensor fails closed") {
+ AL empty; std::vector<std::string> names;
+ for(int l=0;l<2;++l) {
+  auto p="model.audio_tower.layers."+std::to_string(l)+".";
+  for(const auto& e:ai()) names.push_back(p+e.name);
+  for(const auto& e:audio_clips(empty))for(auto b:{"input_min","input_max","output_min","output_max"})
+    names.push_back(p+e.first+"."+b);
+ }
+ names.push_back("model.audio_tower.output_proj.weight");
+ names.push_back("model.audio_tower.output_proj.bias");
+ for(const auto& name:names)for(int bad=0;bad<3;++bad) {
+  Fixture f;add_audio(f,4,4,2);f.add(audio_proj,{2,5});
+  if(bad==0)f.header.erase(name);
+  if(bad==1)f.header[name]["shape"].push_back(1);
+  if(bad==2)f.header[name]["dtype"]="F16";
+  reject_mm(f,audio_config(),bad==2?"gemma4: "+name+" requires BF16":name);
+ }
+}
+
+namespace {
+void set_audio_bits(Fixture& f,const std::string& name,uint16_t bits) {
+ auto start=f.header[name]["data_offsets"][0].get<size_t>();
+ std::memcpy(f.bytes.data()+start,&bits,2);
+}
+vllm::Gemma4Weights load_audio_fixture(Fixture& f,const vllm::HfConfig& c,bool owned) {
+ auto shards=f.open();
+ if(owned)return vllm::LoadGemma4ForConditionalGenerationWeightsOwned(
+   std::make_shared<const std::vector<vllm::SafetensorsFile>>(std::move(shards)),c);
+ return vllm::LoadGemma4ForConditionalGenerationWeights(shards,c);
+}
+}
+TEST_CASE("E4B audio blocks: every bound rejects NaN and reversed pairs") {
+ AL empty;
+ for(int l=0;l<2;++l)for(const auto& e:audio_clips(empty)) {
+  auto p="model.audio_tower.layers."+std::to_string(l)+"."+e.first;
+  for(auto b:{"input_min","input_max","output_min","output_max"}) {
+   Fixture f;add_audio(f,4,4,2);f.add(audio_proj,{2,5});
+   set_audio_bits(f,p+"."+b,0x7fc1);
+   reject_mm(f,audio_config(),"gemma4: "+p+"."+b+" must not be NaN");
+  }
+  for(auto b:{"input","output"}) {
+   Fixture f;add_audio(f,4,4,2);f.add(audio_proj,{2,5});
+   set_audio_bits(f,p+"."+b+"_min",0x7f80);
+   reject_mm(f,audio_config(),"gemma4: "+p+" "+b+"_min exceeds "+b+"_max");
+  }
+ }
+}
+TEST_CASE("E4B audio blocks: disabled clipping and infinite equal bounds") {
+ for(bool owned:{false,true})for(int mode=0;mode<3;++mode) {
+  Fixture f;add_audio(f,4,4,2);f.add(audio_proj,{2,5});auto c=audio_config();AL empty;
+  if(mode==0)c.raw["audio_config"]["use_clipped_linears"]=false;
+  for(int l=0;l<2;++l)for(const auto& e:audio_clips(empty))
+   for(auto b:{"input_min","input_max","output_min","output_max"}) {
+    auto name="model.audio_tower.layers."+std::to_string(l)+"."+e.first+"."+b;
+    if(mode==0)f.header.erase(name);
+    else set_audio_bits(f,name,mode==2?0x4000:(std::string(b).find("min")!=std::string::npos?0xff80:0x7f80));
+   }
+  auto w=load_audio_fixture(f,c,owned);REQUIRE(w.audio_config);
+  CHECK(w.audio_config->use_clipped_linears==(mode!=0));
+  for(const auto& a:w.audio_frontend_weights.layers)for(const auto& e:audio_clips(a)) {
+   CHECK(e.second->in_min==(mode==2?2.f:-std::numeric_limits<float>::infinity()));
+   CHECK(e.second->out_min==e.second->in_min);
+   CHECK(e.second->in_max==(mode==2?2.f:std::numeric_limits<float>::infinity()));
+   CHECK(e.second->out_max==e.second->in_max);
+  }
+ }
+}
+TEST_CASE("E4B audio blocks: typed config rejects malformed values and overflow") {
+ for(auto key:{"num_hidden_layers","num_attention_heads","conv_kernel_size","attention_chunk_size",
+               "attention_context_left","attention_context_right"})
+  for(const auto& bad:std::vector<json>{nullptr,true,"2",-1,1.5,json::array(),uint64_t(-1)}) {
+   Fixture f;add_audio(f,4,4,2);f.add(audio_proj,{2,5});auto c=audio_config();
+   c.raw["audio_config"][key]=bad;reject_mm(f,c,std::string("audio_config ")+key+" invalid integer");
+  }
+ for(auto key:{"num_hidden_layers","num_attention_heads","conv_kernel_size","attention_chunk_size","attention_context_left"}) {
+  Fixture f;add_audio(f,4,4,2);f.add(audio_proj,{2,5});auto c=audio_config();
+  c.raw["audio_config"][key]=0;reject_mm(f,c,std::string("audio_config ")+key+" invalid integer");
+ }
+ for(auto key:{"residual_weight","attention_logit_cap","attention_invalid_logits_value","gradient_clipping"})
+  for(const auto& bad:std::vector<json>{nullptr,true,"2",1e300,std::numeric_limits<double>::quiet_NaN(),std::numeric_limits<double>::infinity()}) {
+   Fixture f;add_audio(f,4,4,2);f.add(audio_proj,{2,5});auto c=audio_config();
+   c.raw["audio_config"][key]=bad;reject_mm(f,c,std::string("audio_config ")+key+" invalid finite F32 value");
+  }
+ for(auto key:{"attention_logit_cap","gradient_clipping"})for(double bad:{0.,-1.,1e-300}) {
+  Fixture f;add_audio(f,4,4,2);f.add(audio_proj,{2,5});auto c=audio_config();
+  c.raw["audio_config"][key]=bad;reject_mm(f,c,std::string("audio_config ")+key+" invalid finite F32 value");
+ }
+ for(auto key:{"num_hidden_layers","conv_kernel_size"}) {
+  Fixture f;add_audio(f,4,4,2);f.add(audio_proj,{2,5});auto c=audio_config();
+  c.raw["audio_config"][key]=INT64_MAX;
+  f.header.erase("model.audio_tower.layers.0.feed_forward1.ffw_layer_1.linear.weight");
+  reject_mm(f,c,"audio_config block tensor size overflow");
+ }
+ for(auto key:{"attention_chunk_size","attention_context_left","attention_context_right"}) {
+  Fixture f;add_audio(f,4,4,2);f.add(audio_proj,{2,5});auto c=audio_config();
+  c.raw["audio_config"][key]=INT64_MAX;reject_mm(f,c,"audio_config attention context overflow");
+ }
+ for(const auto& bad:std::vector<json>{nullptr,0,"false",json::array()}) {
+  Fixture f;add_audio(f,4,4,2);f.add(audio_proj,{2,5});auto c=audio_config();
+  c.raw["audio_config"]["use_clipped_linears"]=bad;
+  reject_mm(f,c,"audio_config use_clipped_linears must be boolean");
+ }
+ {Fixture f;add_audio(f,4,4,2);f.add(audio_proj,{2,5});auto c=audio_config();
+  c.raw["audio_config"]["hidden_act"]=nullptr;reject_mm(f,c,"audio_config hidden_act must be a string");}
+ {Fixture f;add_audio(f,4,4,2);f.add(audio_proj,{2,5});auto c=audio_config();
+  c.raw["audio_config"]["num_attention_heads"]=5;reject_mm(f,c,"audio_config num_attention_heads exceeds hidden_size");}
+}
+TEST_CASE("E4B audio blocks: config overrides and absent inventory") {
+ for(bool owned:{false,true}) {
+  Fixture f;add_audio(f,4,4,2);f.add(audio_proj,{2,5});auto c=audio_config();
+  auto& j=c.raw["audio_config"];j["residual_weight"]=-0.25;j["attention_logit_cap"]=7;
+  j["attention_invalid_logits_value"]=-2;j["gradient_clipping"]=32;
+  j["attention_chunk_size"]=3;j["attention_context_left"]=2;j["attention_context_right"]=1;
+  j["hidden_act"]="relu";
+  auto w=load_audio_fixture(f,c,owned);REQUIRE(w.audio_config);const auto& a=*w.audio_config;
+  CHECK(a.residual_weight==-0.25f);CHECK(a.attention_logit_cap==7);
+  CHECK(a.attention_invalid_logits_value==-2);CHECK(a.gradient_clipping==32);
+  CHECK(a.chunk_size==3);CHECK(a.context_left==2);CHECK(a.context_right==1);CHECK(a.hidden_act=="relu");
+  CHECK(w.audio.config==j);
+  auto none=load_audio_fixture(f,config(),owned);CHECK_FALSE(none.audio_config);
+  CHECK(none.audio_frontend_weights.layers.empty());CHECK(none.audio_frontend_weights.output_proj_b.empty());
+ }
+}
+
+TEST_CASE("E4B audio blocks: source layer and head defaults with twelve tiny blocks") {
+ for(bool owned:{false,true}) {
+  Fixture f;add_audio(f,8,4,2);add_blocks(f,8,12,8);f.add(audio_proj,{2,8});
+  auto c=audio_config();auto& j=c.raw["audio_config"];
+  j["hidden_size"]=8;j.erase("num_hidden_layers");j.erase("num_attention_heads");
+  j.erase("output_proj_dims");
+  auto w=load_audio_fixture(f,c,owned);REQUIRE(w.audio_config);
+  CHECK(w.audio_config->num_layers==12);CHECK(w.audio_config->num_heads==8);
+  CHECK(w.audio_config->head_dim==1);CHECK(w.audio_config->output_proj_dims==8);
+  REQUIRE(w.audio_frontend_weights.layers.size()==12);
+  for(const auto& a:w.audio_frontend_weights.layers) {
+   CHECK(a.attn.per_dim_scale.size()==1);CHECK(a.ff1.ffw1.w.size()==256);
+  }
+ }
 }

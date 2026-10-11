@@ -128,7 +128,9 @@ struct Gemma4AudioFrontendConfig {
 };
 
 struct Gemma4Weights {
+  // Complete owned host-F32 audio tower inventory; historical member name.
   multimodal::Gemma4AudioWeights audio_frontend_weights;
+  std::optional<multimodal::Gemma4AudioConfig> audio_config;
   std::optional<Gemma4AudioFrontendConfig> audio_frontend_config;
   // Partial inventory: patch tensors and blocks; clipping/execution remain owed.
   multimodal::Gemma4VisionWeights vision_patch_weights;

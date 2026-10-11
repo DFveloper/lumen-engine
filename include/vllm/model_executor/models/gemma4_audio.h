@@ -44,10 +44,14 @@
 
 #include <cstdint>
 #include <vector>
+#include <limits>
+#include <string>
 
 namespace vllm::multimodal {
 
 struct Gemma4AudioConfig {
+  bool use_clipped_linears = true;
+  std::string hidden_act = "silu";
   int64_t hidden_size = 1024;
   int64_t num_layers = 12;
   int64_t num_heads = 8;
@@ -73,10 +77,10 @@ struct Gemma4AudioConfig {
   int64_t ffn_dim() const { return hidden_size * 4; }                    // 4096
 };
 
-// Gemma4ClippableLinear QAT activation clamp (all finite trained bounds).
+// Gemma4ClippableLinear QAT clamp; disabled clipping has true infinite bounds.
 struct AClip {
-  float in_min = -3.4e38f, in_max = 3.4e38f;
-  float out_min = -3.4e38f, out_max = 3.4e38f;
+  float in_min = -std::numeric_limits<float>::infinity(), in_max = std::numeric_limits<float>::infinity();
+  float out_min = -std::numeric_limits<float>::infinity(), out_max = std::numeric_limits<float>::infinity();
 };
 
 // A clippable Linear: weight [out,in] row-major f32 + the activation clamp.
