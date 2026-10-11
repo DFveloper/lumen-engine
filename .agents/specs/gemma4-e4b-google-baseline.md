@@ -781,3 +781,78 @@ contracts, not general multi-token Conformer parity. SupportsMmInputs remains
 false; embed_mm is absent. Full preflight, original-checkpoint execution,
 production BF16, T03-T06 and runtime acceptance remain pending. Await root
 verification and independent cumulative review 2b63b of the committed head.
+
+## T05A executable audio preprocessing prerequisite
+
+The loaded CPU audio slice at d021e05980db9157f4324d5b05e3c016f4e6c78a is
+reviewed per parent rootbg166 and review2b63: 44 cases/7139 assertions,
+28 metadata tests and 15 mutation kills. This is supplied acceptance evidence,
+not a claim of a rerun here. encode_mm exists for CPU host F32 only;
+embed_mm remains absent, SupportsMmInputs false. Full registry resolution and
+served runtime have not been established.
+
+Plan change before implementation: T05A depends on T01A metadata and the
+accepted audio consumer, not T04 image preprocessing. Its typed waveform to
+AudioKwargs transformation has no image/template code dependency. T03 template,
+T04 image and T06 video remain PENDING. T05 stays PARTIAL until prompt expansion,
+shared factory/server routing, resampling policy parity and original upstream
+oracle gates are complete. This prerequisite uses the existing audio processor
+ProcessWaveform interface and shared AudioKwargs, not a standalone executable
+API. No image factory or served capability is fabricated.
+
+### Exact source contract
+
+Transformers a08ace4bbd97e721c98751deec37d87b026acadc,
+`src/transformers/models/gemma4/feature_extraction_gemma4.py`,
+Gemma4AudioFeatureExtractor.__init__, _extract_spectrogram and __call__:
+- 16000 Hz, 128 filters, 320-sample periodic Hann cast to float32; hop 160,
+  FFT512. Float32 waveform/window multiplication precedes double FFT.
+- Left 160 zeros, no centered reflect padding. Unfold windows have **321**
+  samples, discard the last sample before window/FFT; right zero pad to 512.
+- Magnitude (NOT power); HTK mel centres, triangles in Hz, norm=None.
+  Double filter coefficients, natural log(magnitude-mel + 0.001), not clamp.
+- No dither, preemphasis, waveform scaling or per-bin normalization for the
+  pinned processor_config.json. No inference from Whisper/Parakeet semantics.
+- Single-item longest padding rounds waveform length up to multiple 128.
+  End sample i*160+320 in left-padded waveform determines mask validity;
+  invalid mel rows are zeroed after float32 conversion. Transpose upstream
+  [frames,128] into shared AudioKwargs [128,frames]. num_samples is retained
+  input length; num_tokens = ceil(valid_frames/4), max 750.
+- Source __call__ defaults truncate at 480000 samples. Pinned vLLM
+  gemma4_mm.py::_get_max_audio_len derives the same 30 seconds from
+  750*40ms and 16000 Hz. This bounded API rejects lengths beyond 480000
+  instead of silently truncating; this is an explicit validation divergence.
+  Other rates are rejected, not silently relabeled or passed through the
+  shared scipy resampler (which is not default PyAV parity). Rate conversion
+  belongs before this frontend and remains pending. Empty and <=160-sample
+  inputs return zero valid tokens; negative length, null nonempty buffer,
+  nonfinite samples and unsupported rate throw before allocation/processing.
+
+Source helpers at the same SHA: audio_utils.py::mel_filter_bank,
+_create_triangular_filter_bank, hertz_to_mel, mel_to_hertz and window_function;
+feature_extraction_sequence_utils.py::SequenceFeatureExtractor._pad/_truncate.
+Retrieved source SHA256s (scratch retains exact bytes):
+feature_extraction_gemma4.py 44101c7ce4286e2e37ca10629b97a5c09c53b3862ad21ce6f9ae35d3d87d76d4;
+audio_utils.py 1289c67d1b63a8a56c26ece6ee9f5c9e9e319433f095e492fb8bb3a530349875;
+feature_extraction_sequence_utils.py db6b08c4847ba853194066ae00d438bed672acbefcad6011a424824dca04e12d.
+
+### Shared seams and tests
+
+Existing Whisper/Parakeet frontends use private scalar DFTs with incompatible
+framing. w2v_fbank.cpp has a reusable private radix-2 double FFT: extract its
+unchanged arithmetic into a shared header and use it from both callers, adding
+a power-of-two guard. Extend shared mel_filter_bank with double HTK norm=None
+without altering Slaney callers. No new runtime dependency is required.
+
+Add a bounded CPU target compiling actual processor/mel TUs. Independently
+compute scalar DFT and mel triangles in tests (no production helpers for
+expectations), test silence, impulse, deterministic multitone, short/empty,
+128/160 framing boundaries, trailing-mask zeros, 30-second cap and malformed
+inputs. Exercise returned data through existing loaded encoder consumer where
+feasible; synthetic tests do not establish full oracle parity. Retain and run
+44/7139 loader regression and 28 metadata tests. Check changed-header consumers
+with actual compile_commands flags. External scratch:
+assets/work/2026-10-10-e4b-audio-preprocessing; -j2, incremental <256 MiB,
+external TMPDIR and Git ceiling; stop below 4 GiB free. Full preflight remains
+prohibited/PENDING. No GPU, weights, installs, broad library builds or remote
+writes. Implementation must await root verification and fresh review.
