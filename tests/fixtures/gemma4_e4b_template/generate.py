@@ -57,5 +57,22 @@ add('tool-media',[msg('user','go'),msg('assistant',None,tool_calls=calls),msg('t
 add('history',conversation+[msg('user','again'),msg('assistant','<|channel>thought\nhidden<channel|> visible',reasoning_content='new thought')],tools)
 add('preserve',conversation+[msg('user','again')],tools,preserve_thinking=True)
 add('reasoning-precedence',[msg('user','x'),msg('assistant','y',reasoning='primary',reasoning_content='secondary')])
+# F1: native schema mappings, including recursive calls and mapping-only branches.
+empty_array = dict(type='array', items={})
+schemas = {
+    'empty-items': empty_array,
+    'nested-empty-items': dict(type='object', properties={'child': empty_array}),
+    'array-object-empty-items': dict(type='array', items=dict(type='object', properties={'child': empty_array})),
+    'object-empty-properties': dict(type='object', properties={}),
+    'array-empty-properties': dict(type='array', items=dict(type='object', properties={})),
+    'nonempty-items': dict(type='array', items=dict(type='string')),
+    'empty-enum': dict(type='string', enum=[]),
+    'empty-required': dict(type='object', properties={}, required=[]),
+}
+for name, schema in schemas.items():
+    add('schema-' + name, [msg('user', 'hello')], [dict(type='function', function=dict(
+        name='f', parameters=dict(type='object', properties={'x': schema})))])
+for name, parameters in [('empty-parameters', {}), ('empty-properties', dict(type='object', properties={}))]:
+    add('schema-' + name, [msg('user', 'hello')], [dict(type='function', function=dict(name='f', parameters=parameters))])
 (root/'oracle.json').write_text(json.dumps(dict(jinja2=jinja2.__version__,checkpoint='ee0ef6023621cff504d758262d4e04895a5af4a2',cases=rows),ensure_ascii=False,indent=2)+'\n')
 print(jinja2.__version__,len(rows),'cases')

@@ -5635,6 +5635,2042 @@
       },
       "generation": true,
       "expected": "<bos><|turn>system\n<|think|>\n<turn|>\n<|turn>user\nx<turn|>\n<|turn>model\n<|channel>thought\nprimary\n<channel|>y<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-empty-items/None/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {}
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-empty-items/None/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {}
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-empty-items/False/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {}
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-empty-items/False/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {}
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-empty-items/True/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {}
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-empty-items/True/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {}
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-nested-empty-items/None/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "object",
+                    "properties": {
+                      "child": {
+                        "type": "array",
+                        "items": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{properties:{child:{type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-nested-empty-items/None/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "object",
+                    "properties": {
+                      "child": {
+                        "type": "array",
+                        "items": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{properties:{child:{type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-nested-empty-items/False/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "object",
+                    "properties": {
+                      "child": {
+                        "type": "array",
+                        "items": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{properties:{child:{type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-nested-empty-items/False/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "object",
+                    "properties": {
+                      "child": {
+                        "type": "array",
+                        "items": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{properties:{child:{type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-nested-empty-items/True/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "object",
+                    "properties": {
+                      "child": {
+                        "type": "array",
+                        "items": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{properties:{child:{type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-nested-empty-items/True/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "object",
+                    "properties": {
+                      "child": {
+                        "type": "array",
+                        "items": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{properties:{child:{type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-array-object-empty-items/None/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "child": {
+                          "type": "array",
+                          "items": {}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{items:{properties:{child:{type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>},type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-array-object-empty-items/None/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "child": {
+                          "type": "array",
+                          "items": {}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{items:{properties:{child:{type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>},type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-array-object-empty-items/False/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "child": {
+                          "type": "array",
+                          "items": {}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{items:{properties:{child:{type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>},type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-array-object-empty-items/False/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "child": {
+                          "type": "array",
+                          "items": {}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{items:{properties:{child:{type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>},type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-array-object-empty-items/True/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "child": {
+                          "type": "array",
+                          "items": {}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{items:{properties:{child:{type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>},type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-array-object-empty-items/True/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "child": {
+                          "type": "array",
+                          "items": {}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{items:{properties:{child:{type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>},type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-object-empty-properties/None/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "object",
+                    "properties": {}
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{properties:{},type:<|\"|>OBJECT<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-object-empty-properties/None/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "object",
+                    "properties": {}
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{properties:{},type:<|\"|>OBJECT<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-object-empty-properties/False/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "object",
+                    "properties": {}
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{properties:{},type:<|\"|>OBJECT<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-object-empty-properties/False/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "object",
+                    "properties": {}
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{properties:{},type:<|\"|>OBJECT<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-object-empty-properties/True/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "object",
+                    "properties": {}
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{properties:{},type:<|\"|>OBJECT<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-object-empty-properties/True/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "object",
+                    "properties": {}
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{properties:{},type:<|\"|>OBJECT<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-array-empty-properties/None/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{items:{properties:{},type:<|\"|>OBJECT<|\"|>},type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-array-empty-properties/None/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{items:{properties:{},type:<|\"|>OBJECT<|\"|>},type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-array-empty-properties/False/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{items:{properties:{},type:<|\"|>OBJECT<|\"|>},type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-array-empty-properties/False/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{items:{properties:{},type:<|\"|>OBJECT<|\"|>},type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-array-empty-properties/True/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{items:{properties:{},type:<|\"|>OBJECT<|\"|>},type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-array-empty-properties/True/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{items:{properties:{},type:<|\"|>OBJECT<|\"|>},type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-nonempty-items/None/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{items:{type:<|\"|>STRING<|\"|>},type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-nonempty-items/None/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{items:{type:<|\"|>STRING<|\"|>},type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-nonempty-items/False/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{items:{type:<|\"|>STRING<|\"|>},type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-nonempty-items/False/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{items:{type:<|\"|>STRING<|\"|>},type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-nonempty-items/True/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{items:{type:<|\"|>STRING<|\"|>},type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-nonempty-items/True/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{items:{type:<|\"|>STRING<|\"|>},type:<|\"|>ARRAY<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-empty-enum/None/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "string",
+                    "enum": []
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-empty-enum/None/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "string",
+                    "enum": []
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-empty-enum/False/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "string",
+                    "enum": []
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-empty-enum/False/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "string",
+                    "enum": []
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-empty-enum/True/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "string",
+                    "enum": []
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-empty-enum/True/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "string",
+                    "enum": []
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-empty-required/None/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{properties:{},type:<|\"|>OBJECT<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-empty-required/None/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{properties:{},type:<|\"|>OBJECT<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-empty-required/False/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{properties:{},type:<|\"|>OBJECT<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-empty-required/False/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{properties:{},type:<|\"|>OBJECT<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-empty-required/True/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{properties:{},type:<|\"|>OBJECT<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-empty-required/True/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{properties:{x:{properties:{},type:<|\"|>OBJECT<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-empty-parameters/None/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {}
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-empty-parameters/None/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {}
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-empty-parameters/False/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {}
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-empty-parameters/False/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {}
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-empty-parameters/True/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {}
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-empty-parameters/True/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {}
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-empty-properties/None/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-empty-properties/None/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {},
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-empty-properties/False/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-empty-properties/False/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
+    },
+    {
+      "name": "schema-empty-properties/True/False",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        ]
+      },
+      "generation": false,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n"
+    },
+    {
+      "name": "schema-empty-properties/True/True",
+      "request": {
+        "model": "google/gemma-4-E4B-it",
+        "messages": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ],
+        "chat_template_kwargs": {
+          "enable_thinking": true
+        },
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "f",
+              "parameters": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        ]
+      },
+      "generation": true,
+      "expected": "<bos><|turn>system\n<|think|>\n<|tool>declaration:f{description:<|\"|><|\"|>,parameters:{type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhello<turn|>\n<|turn>model\n"
     }
   ]
 }

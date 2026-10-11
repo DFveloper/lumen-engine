@@ -1403,3 +1403,21 @@ writer/review scratch (~72MiB already), stop below4GiB free. Full preflight
 prohibited/PENDING; no GPU/network/weights/install/full-library/push/PR/merge.
 Inherited scoped helper role retained. Root verification then fresh independent
 mutation review remain owed; full T03/T10/runtime readiness remains false.
+
+### T03A F1 repair evidence — awaiting root and fresh review
+
+Prospective8c32404ac preceded executable oracle RED:24 failures across empty
+items, object-nested items, array/object-nested items and empty parameters.
+The targeted RED excluded47 unrelated cases, not a final no-skip gate.
+The bounded exact-SHA adapter now qualifies all three schema mapping truth
+tests (params, properties, items); mapping-only branches remain unchanged.
+Original Google fixture bytes and oracle provenance remain unchanged.
+
+Independent Jinja2 3.1.2 oracle180 regenerates identically. Final CTest5/5:
+template48/415, loader46/7196, audio5/5225, image4/201, vision5/1172,
+all zero skips; metadata28 passes. Actual production TU closure retained,
+no stubs/libvllm. Evidence/reproduction: assets/work/2026-10-11-e4b-template-fix.
+Budget remains below256MiB aggregate incremental; free disk above4GiB.
+F1 issue closed for this repair, not scope acceptance. Root verification and
+fresh independent mutation review remain owed. Full T03/T10/runtime, original
+weights and full preflight remain pending; readiness remains false.

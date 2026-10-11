@@ -350,10 +350,20 @@ ParsedChatTemplate ParseChatTemplateKeepingError(
     }
     if (parsed.google_e4b) {
       // minja treats an empty mapping as true; Python/Jinja treats it as false.
-      const std::string condition = "if params['properties'] -%}";
-      const auto pos = source.find(condition);
-      if (pos == std::string::npos) throw std::runtime_error("Google schema condition missing");
-      source.replace(pos, condition.size(), "if params['properties'] and params['properties'] | length > 0 -%}");
+      // Qualify truth tests, not `is mapping`: nested empty properties must
+      // still render {} in the mapping-only branches of the original source.
+      for (const std::string value : {"params", "params['properties']",
+                                      "value['items']"}) {
+        const auto condition = value == "value['items']"
+            ? "if value['items'] is mapping and " + value : "if " + value;
+        const auto original = condition + " -%}";
+        const auto pos = source.find(original);
+        if (pos == std::string::npos) {
+          throw std::runtime_error("Google schema condition missing");
+        }
+        source.replace(pos, original.size(),
+                       condition + " and " + value + " | length > 0 -%}");
+      }
     }
     parsed.root = ParseChatTemplate(source);
   } catch (const std::exception& e) {

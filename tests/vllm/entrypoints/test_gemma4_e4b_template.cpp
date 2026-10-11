@@ -26,7 +26,7 @@ TEST_CASE("E4B original Google JSON requests match independent Jinja bytes") {
   std::ifstream f(std::string(VLLM_TEST_FIXTURES_DIR)+"/gemma4_e4b_template/oracle.json");
   REQUIRE(f.good());
   Json oracle; f >> oracle;
-  REQUIRE(oracle["cases"].size() == 120);
+  REQUIRE(oracle["cases"].size() == 180);
   const auto tmpl=Template();
   for (const auto& row:oracle["cases"]) {
     INFO(row["name"].dump());
