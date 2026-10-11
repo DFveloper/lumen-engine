@@ -1495,3 +1495,58 @@ Aggregate campaign growth is about142MiB of256MiB; free space exceeds4GiB.
 Root verification/fresh review remain pending. T03B, prompt preparation, served
 reasoning, T10, original weights and full preflight remain owed. Full T03 is not
 complete; SupportsMmInputs remains false.
+
+### T03C2 prompt state (prospective)
+
+ISSUE-LOCAL-01M4P1A9D5ED9CY2YT4229BNB9 owns engine-local prompt preparation.
+T03C1 accepted at01035eef6 per rootbg684 (six CPU targets, zero skips,
+28 metadata) and reviewer3876d13e PASS (5/226,39216 Python comparisons,
+nine mutants). T03A accepted at1f8e4a529. Review evidence lives in
+assets/work/2026-10-11-e4b-reasoning-review/README.md.
+
+Pinned vLLM a7c23ac96d7806e7c7e7d862eadbce5a33529b94 gemma4.py:418-446,
+480-526 and engine/parser_engine.py:195-218,446-461 define this contract.
+Retained nine-file manifest lives in assets/work/2026-10-11-e4b-parser-sources.
+Add a nullable borrowed prompt-ID overload while preserving four-argument
+parse_delta. Absent does not consume preparation; present empty does. Call a
+public virtual base no-op hook once before feed, then mark prepared AFTER the
+hook, since hooks may reset. Reset clears preparation. Gemma resolves supplied
+tokenizer IDs without guessed fallbacks. Reverse scan opens reasoning only if
+channel opener precedes any close, tool start, new turn or tool response in
+reverse order. Thinking does not gate this. Reset only the underlying engine
+to REASONING and protect it from default initialize_streaming; preserve assembly
+bookkeeping, initial CONTENT elsewhere and existing prefix heuristics.
+
+Prospective TDD permits an inert compatible prompt-carrying overload as minimal
+test enablement before behavioral RED. A missing-overload compile error is not
+RED. Real-factory tests use synthetic IDs, not original vocabulary. The decisive
+case supplies [channel,thought,newline] then 'Sure' before any close: every
+preclose byte is reasoning, postclose Hello is content. Whole-batch alone is
+invalid because the existing heuristic injects an opener on a first-chunk close.
+Port retained streaming PromptOpenReasoning276-360, PreInit382-469 and
+ChannelLess478-545 with chunk1/2/10/whole, both thinking modes, generated and
+redundant openers, fresh turns and nonstream comparison, all boundary orders,
+missing IDs/null tokenizer, repeated prompt after close, absent versus empty,
+reset/prefix state, prepare then initialize, finish not a new request. A small
+subclass checks reset-capable base-hook lifecycle; production factory is primary.
+Expected values derive from pinned source/tests, never C++ output.
+
+Reuse test_gemma4_e4b_reasoning_end and its13 production TUs; add focused tests
+and existing assembly regressions if closure permits. Older goldens are regression
+coverage, not new-pin parity. Capture executable assertion RED, then exact-count
+zero-skip GREEN. Run all six CPU targets,28 metadata and actual-flags header
+consumers including serving/adapters. Audit function-pointer uses: overloads
+preserve call source compatibility but untyped address-taking becomes ambiguous;
+new virtual/layout requires rebuilding, not blanket binary compatibility.
+Review mutations must remove/move/repeat preparation, set flag before a reset
+hook, omit reset clearing/init protection, remove boundaries and gate on thinking.
+
+No registry, adapter routing, Gemma text-tool branch or HTTP prompt claim.
+T03B, served reasoning, T10, original weights and full preflight remain pending;
+readiness remains false. Retain helper role; full preflight prohibited, not rerun.
+Evidence: assets/work/2026-10-11-e4b-prompt-state (commands, red/green/resources).
+Max-j2, VT_CPU_THREADS=1, external TMPDIR and Git ceiling assets/work. Entry
+aggregate148MiB of256MiB; stop at256MiB aggregate or below4GiB free. Reuse
+mutant objects sequentially and preserve fresh-review space. No GPU/network,
+download/install/weights/full library/push/PR/merge/agents/unrelated cleanup.
+Root verification and fresh review follow the committed implementation.
