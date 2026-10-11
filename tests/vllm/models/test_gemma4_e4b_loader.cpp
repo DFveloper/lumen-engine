@@ -1280,6 +1280,13 @@ TEST_CASE("E4B preprocessing: waveform reaches loaded 128-mel encoder") {
   set("model.audio_tower.output_proj.weight",std::vector<float>(20,0));
   set("model.audio_tower.output_proj.bias",{1,2,3,4,5});
   set(audio_proj,{1,0,0,0,0, 0,0,0,0,1});
+  // H=2: BF16 sqrt(2) is 0x3fb5 (181/128). The selected text
+  // coordinate 0x3f06 (67/128) gives 12127/16384, rounding to 0x3f3d.
+  // Using unrounded sqrt(2) instead rounds to 0x3f3e. See the spec's
+  // bounded shared merge contract and Gemma ForwardBody/EmbedScaledBf16.
+  const size_t text_offset=f.header["model.language_model.embed_tokens.weight"]["data_offsets"][0].get<size_t>();
+  const uint16_t scale_probe=0x3f06;
+  std::memcpy(f.bytes.data()+text_offset+3*sizeof(uint16_t),&scale_probe,sizeof(scale_probe));
   auto shards=f.open(); auto w=vllm::LoadGemma4ForConditionalGenerationWeights(shards,c);
   const vllm::ModelRegistration registration{"Gemma4ForConditionalGeneration",&vllm::kGemma4MmHooks,{}};
   vllm::Gemma4LoadedModel model(registration,std::move(w));
@@ -1306,6 +1313,7 @@ TEST_CASE("E4B preprocessing: waveform reaches loaded 128-mel encoder") {
   REQUIRE(merged.mm.inputs_embeds.shape[0]==3);
   REQUIRE(merged.mm.ple_token_ids.dtype==vt::DType::kI32);
   CHECK(merged.mm.inputs_embeds.Ptr<uint16_t>()[0]==0x3fb5);
+  CHECK(merged.mm.inputs_embeds.Ptr<uint16_t>()[1]==0x3f3d);
   CHECK(merged.mm.inputs_embeds.Ptr<uint16_t>()[4]==0x3fb5);
   CHECK(merged.mm.inputs_embeds.Ptr<uint16_t>()[2]==vt::F32ToBF16(1/std::sqrt(11.0001)));
   CHECK(merged.mm.inputs_embeds.Ptr<uint16_t>()[3]==vt::F32ToBF16(5/std::sqrt(11.0001)));
@@ -1320,7 +1328,9 @@ TEST_CASE("E4B preprocessing: waveform reaches loaded 128-mel encoder") {
 TEST_CASE("E4B merge: ordered chunk slices validation ownership and readiness") {
   Fixture f; auto c=audio_config(); add_audio(f,4,4,2); f.add(audio_proj,{2,5});
   // Nonuniform checkpoint rows expose incorrect token lookup/order and scaling.
-  const uint16_t table[]{0x3f80,0x4000,0x4040,0x4080,0x40a0,0x40c0};
+  // Token 1 is initially masked; the text-only call below exposes the same
+  // H=2 rounding discriminator (67/128)*(181/128) -> BF16 0x3f3d.
+  const uint16_t table[]{0x3f80,0x4000,0x3f06,0x4080,0x40a0,0x40c0};
   const size_t offset=f.header["model.language_model.embed_tokens.weight"]["data_offsets"][0].get<size_t>();
   std::memcpy(f.bytes.data()+offset,table,sizeof(table));
   auto shards=f.open();
@@ -1368,6 +1378,7 @@ TEST_CASE("E4B merge: ordered chunk slices validation ownership and readiness") 
   q.device.type=vt::DeviceType::kCUDA;CHECK_THROWS(call());q.device.type=vt::DeviceType::kCPU;
   ids.clear();mask.clear();slices.clear();CHECK_THROWS(call());
   ids={1};mask={0};auto text=call();CHECK(text.mm.ple_token_ids.Ptr<int32_t>()[0]==1);
+  CHECK(text.mm.inputs_embeds.Ptr<uint16_t>()[0]==0x3f3d);
   CHECK_FALSE(vllm::ModelRegistry::SupportsMmInputs(model));
   // Default-compatible readiness contract, same production hook pointers.
   vllm::ModelFactory factory{};
