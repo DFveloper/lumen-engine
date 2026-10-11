@@ -733,3 +733,28 @@ assets/work/2026-10-10-e4b-encoder-integration. Full preflight remains pending
 and was not run. T03-T06, merge hook, production BF16, T01B and original-model
 runtime acceptance remain pending. This slice awaits root verification and
 fresh independent review; previous retention review is not reused as its review.
+
+### Audio epsilon correctness refinement
+
+Review 2b63b rejects e1c27f951: positive configured epsilon is accepted, but
+Gemma4AudioForward incorrectly applies it to every norm. Pinned HF
+`a08ace4bbd97e721c98751deec37d87b026acadc`, modeling_gemma4.py:198,
+423-424 and 535-537 uses default **1e-6** for FF pre/post norms (both FFs),
+layer pre/post-attention and output norms. Keep configured rms_norm_eps for
+subsampling LayerNorm (:372, :394-399), light-conv RMS (:499-500), and
+weightless connector RMS (pinned vLLM Gemma4MultimodalEmbedder.forward).
+Do not reject otherwise valid nondefault epsilon or blanket-change all norms.
+
+Before behavior changes, add a small nonzero sparse Conformer fixture through
+loaded weights and the shared registry hook. An independent double scalar
+oracle must propagate frontend LayerNorm/ReLU, both FF residuals, single-token
+attention, light-conv GLU/SiLU, layer output norm and connector. Use small
+exactly BF16-representable weights and distinct configured epsilon; compare
+numeric outputs, not the production forward against itself. Preserve all 43
+existing cases and 28 metadata tests. Capture actual red mismatch then green;
+compiled scratch mutants must kill reversion of fixed norms and changing
+configured frontend/light-conv/connector norms to fixed epsilon. Keep the
+minimal 15-real-TU CPU build at -j2 and scratch below 256 MiB. Evidence belongs
+in assets/work/2026-10-10-e4b-audio-epsilon-fix. No headers or capability changes
+are needed. Full preflight, T03-T06 and runtime acceptance remain pending;
+no GPU, weights, installation, remote operation or full preflight is authorized.
