@@ -1,11 +1,71 @@
 // Pinned Gemma4AudioModel.forward and gemma4_mm.py::_process_audio_input.
-// CPU reference adapter only; embed_mm and production BF16 remain owed.
+// CPU reference adapters; production device execution remains owed.
 #include "vllm/model_executor/models/gemma4_loaded.h"
 #include <cmath>
 #include <cstring>
 
 namespace vllm {
-constinit const ModelFactory kGemma4MmHooks{.encode_mm = &EncodeMmGemma4Audio};
+constinit const ModelFactory kGemma4MmHooks{.encode_mm = &EncodeMmGemma4Audio,
+    .embed_mm = &EmbedMmGemma4, .mm_inputs_ready = false};
+MmForwardBuffers EmbedMmGemma4(LoadedModel& model, const HfConfig& config,
+    vt::Queue& queue, const MmEmbedInputs& in) {
+  VT_CHECK(queue.device.type == vt::DeviceType::kCPU && !in.host_token_ids_stale,
+           "gemma4 merge: CPU current host ids required");
+  VT_CHECK(in.token_ids && in.mm_embeds && in.is_mm_embed &&
+           (!in.mrope_positions || in.mrope_positions->empty()), "gemma4 merge: inputs");
+  const auto& ids=*in.token_ids; const auto& mask=*in.is_mm_embed;
+  const int64_t H=config.hidden_size, V=config.vocab_size;
+  VT_CHECK(H>0 && V>0 && !ids.empty() && ids.size()==mask.size() &&
+           ids.size()<=SIZE_MAX/sizeof(uint16_t)/H &&
+           ids.size()<=static_cast<uint64_t>(INT64_MAX/H), "gemma4 merge: shape");
+  const auto& w=ModelAs<Gemma4LoadedModel>(model,"Gemma4ForConditionalGeneration").weights();
+  const auto& tab=w.embed_tokens;
+  VT_CHECK(V<=INT64_MAX/H && static_cast<uint64_t>(V)<=SIZE_MAX/2/H &&
+           tab.dtype==vt::DType::kBF16 && tab.rank==2 && tab.shape[0]==V &&
+           tab.shape[1]==H && tab.bytes.size()==static_cast<size_t>(V*H)*2,
+           "gemma4 merge: token table");
+  size_t wanted=0;
+  for(size_t t=0;t<ids.size();++t) {
+    VT_CHECK(ids[t]>=0 && ids[t]<V, "gemma4 merge: token range");
+    VT_CHECK(mask[t]==0 || mask[t]==1, "gemma4 merge: boolean mask");
+    wanted+=mask[t];
+  }
+  size_t rows=0;
+  for(const auto& x:*in.mm_embeds) {
+    VT_CHECK(x.device.type==vt::DeviceType::kCPU && x.dtype==vt::DType::kF32 &&
+             x.rank==2 && x.data && x.shape[0]>0 && x.shape[1]==H &&
+             x.stride[0]==H && x.stride[1]==1 &&
+             static_cast<uint64_t>(x.shape[0])<=wanted-rows,
+             "gemma4 merge: slice shape/dtype/cardinality");
+    rows+=static_cast<size_t>(x.shape[0]);
+  }
+  VT_CHECK(rows==wanted,"gemma4 merge: placeholder cardinality");
+  const auto& raw=config.raw.contains("text_config") ? config.raw.at("text_config") : config.raw;
+  const int64_t ple_vocab=raw.value("vocab_size_per_layer_input",V);
+  VT_CHECK(ple_vocab>0 && ple_vocab<=V,"gemma4 merge: PLE vocabulary");
+  auto values=std::make_shared<std::vector<uint16_t>>(ids.size()*H);
+  auto ple=std::make_shared<std::vector<int32_t>>(ids.size());
+  const float scale=vt::BF16ToF32(vt::F32ToBF16(std::sqrt(static_cast<float>(H))));
+  size_t slice=0; int64_t row=0;
+  for(size_t t=0;t<ids.size();++t) {
+    (*ple)[t]=!mask[t] && ids[t]<ple_vocab ? ids[t] : 0;
+    for(int64_t h=0;h<H;++h) {
+      uint16_t bits; std::memcpy(&bits,tab.bytes.data()+2*(ids[t]*H+h),2);
+      float value=vt::BF16ToF32(bits)*scale;
+      if(mask[t]) value=(*in.mm_embeds)[slice].Ptr<float>()[row*H+h];
+      VT_CHECK(std::isfinite(value),"gemma4 merge: nonfinite embedding");
+      (*values)[t*H+h]=vt::F32ToBF16(value);
+    }
+    if(mask[t] && ++row==(*in.mm_embeds)[slice].shape[0]) {++slice;row=0;}
+  }
+  MmForwardBuffers out;
+  out.storage={values,ple};
+  out.mm.inputs_embeds=vt::Tensor::Contiguous(values->data(),vt::DType::kBF16,
+                                            queue.device,{static_cast<int64_t>(ids.size()),H});
+  out.mm.ple_token_ids=vt::Tensor::Contiguous(ple->data(),vt::DType::kI32,
+                                            queue.device,{static_cast<int64_t>(ids.size())});
+  return out;
+}
 MmEncoderOutput EncodeMmGemma4Audio(LoadedModel& model, const HfConfig& config,
     vt::Queue& queue, const multimodal::MultiModalFeatureSpec& item) {
   VT_CHECK(queue.device.type == vt::DeviceType::kCPU, "gemma4 audio: CPU reference only");

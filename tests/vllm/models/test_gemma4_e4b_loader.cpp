@@ -1295,9 +1295,90 @@ TEST_CASE("E4B preprocessing: waveform reaches loaded 128-mel encoder") {
   REQUIRE(out.embeds.shape[0]==1); REQUIRE(out.embeds.shape[1]==2);
   CHECK(out.embeds.Ptr<float>()[0]==doctest::Approx(1/std::sqrt(11.0001)));
   CHECK(out.embeds.Ptr<float>()[1]==doctest::Approx(5/std::sqrt(11.0001)));
+  std::vector<int32_t> ids{1,2,0};
+  std::vector<char> mask{0,1,0};
+  std::vector<vt::Tensor> slices{out.embeds};
+  vllm::MmEmbedInputs inputs; inputs.token_ids=&ids;
+  inputs.is_mm_embed=&mask; inputs.mm_embeds=&slices;
+  c.raw["text_config"]["vocab_size_per_layer_input"]=1;
+  auto merged=vllm::ModelRegistry::EmbedMm(model,c,q,inputs);
+  REQUIRE(merged.mm.inputs_embeds.dtype==vt::DType::kBF16);
+  REQUIRE(merged.mm.inputs_embeds.shape[0]==3);
+  REQUIRE(merged.mm.ple_token_ids.dtype==vt::DType::kI32);
+  CHECK(merged.mm.inputs_embeds.Ptr<uint16_t>()[0]==0x3fb5);
+  CHECK(merged.mm.inputs_embeds.Ptr<uint16_t>()[4]==0x3fb5);
+  CHECK(merged.mm.inputs_embeds.Ptr<uint16_t>()[2]==vt::F32ToBF16(1/std::sqrt(11.0001)));
+  CHECK(merged.mm.inputs_embeds.Ptr<uint16_t>()[3]==vt::F32ToBF16(5/std::sqrt(11.0001)));
+  for(int i=0;i<3;++i) CHECK(merged.mm.ple_token_ids.Ptr<int32_t>()[i]==0);
   item.length=2; CHECK_THROWS_WITH(vllm::ModelRegistry::EncodeMm(model,c,q,item),doctest::Contains("placeholder length"));
   item.length=0;
   *item.audio_data=processor.ProcessWaveform(waveform.data(),160,16000);
   CHECK_THROWS_WITH(vllm::ModelRegistry::EncodeMm(model,c,q,item),doctest::Contains("no valid frames"));
   CHECK_FALSE(vllm::ModelRegistry::SupportsMmInputs(model));
+}
+
+TEST_CASE("E4B merge: ordered chunk slices validation ownership and readiness") {
+  Fixture f; auto c=audio_config(); add_audio(f,4,4,2); f.add(audio_proj,{2,5});
+  // Nonuniform checkpoint rows expose incorrect token lookup/order and scaling.
+  const uint16_t table[]{0x3f80,0x4000,0x4040,0x4080,0x40a0,0x40c0};
+  const size_t offset=f.header["model.language_model.embed_tokens.weight"]["data_offsets"][0].get<size_t>();
+  std::memcpy(f.bytes.data()+offset,table,sizeof(table));
+  auto shards=f.open();
+  auto w=vllm::LoadGemma4ForConditionalGenerationWeights(shards,c);
+  const vllm::ModelRegistration reg{"Gemma4ForConditionalGeneration",&vllm::kGemma4MmHooks,{}};
+  vllm::Gemma4LoadedModel model(reg,std::move(w)); vt::Queue q{};
+  std::vector<int32_t> ids{2,1,0,2}; std::vector<char> mask{0,1,1,0};
+  std::vector<float> full{99,99,2,3,4,5};
+  auto tensor=vt::Tensor::Contiguous(full.data()+2,vt::DType::kF32,q.device,{1,2});
+  auto second=tensor; second.data=full.data()+4;
+  std::vector<vt::Tensor> slices{tensor,second};
+  vllm::MmEmbedInputs in; in.token_ids=&ids; in.is_mm_embed=&mask; in.mm_embeds=&slices;
+  auto call=[&]{return vllm::ModelRegistry::EmbedMm(model,c,q,in);};
+  auto result=call();
+  CHECK(result.mm.inputs_embeds.Ptr<uint16_t>()[0]==0x40e2);
+  CHECK(result.mm.inputs_embeds.Ptr<uint16_t>()[1]==0x4108);
+  CHECK(result.mm.inputs_embeds.Ptr<uint16_t>()[2]==0x4000);
+  CHECK(result.mm.inputs_embeds.Ptr<uint16_t>()[4]==0x4080);
+  CHECK(result.mm.ple_token_ids.Ptr<int32_t>()[0]==2);
+  CHECK(result.mm.ple_token_ids.Ptr<int32_t>()[1]==0);
+  CHECK(result.mm.ple_token_ids.Ptr<int32_t>()[2]==0);
+  CHECK(result.mm.ple_token_ids.Ptr<int32_t>()[3]==2);
+  full[2]=8; ids[0]=0;
+  CHECK(result.mm.inputs_embeds.Ptr<uint16_t>()[2]==0x4000);
+  CHECK(result.mm.ple_token_ids.Ptr<int32_t>()[0]==2);
+  for(int bad:{-1,3}) {ids[0]=bad; CHECK_THROWS(call());} ids[0]=2;
+  mask[0]=2; CHECK_THROWS(call()); mask[0]=0;
+  mask.pop_back(); CHECK_THROWS(call()); mask.push_back(0);
+  slices.push_back(second); CHECK_THROWS(call()); slices.pop_back();
+  slices.pop_back(); CHECK_THROWS(call()); slices.push_back(second);
+  for(int mode=0;mode<7;++mode) {
+    auto saved=slices[0];
+    if(mode==0)slices[0].rank=1;
+    if(mode==1)slices[0].shape[0]=0;
+    if(mode==2)slices[0].shape[1]=3;
+    if(mode==3)slices[0].dtype=vt::DType::kBF16;
+    if(mode==4)slices[0].stride[0]=3;
+    if(mode==5)slices[0].data=nullptr;
+    if(mode==6)slices[0].device.type=vt::DeviceType::kCUDA;
+    CHECK_THROWS(call()); slices[0]=saved;
+  }
+  full[2]=std::numeric_limits<float>::infinity(); CHECK_THROWS(call());full[2]=2;
+  std::vector<int32_t> positions{0};in.mrope_positions=&positions;CHECK_THROWS(call());in.mrope_positions=nullptr;
+  in.host_token_ids_stale=true;CHECK_THROWS(call());in.host_token_ids_stale=false;
+  q.device.type=vt::DeviceType::kCUDA;CHECK_THROWS(call());q.device.type=vt::DeviceType::kCPU;
+  ids.clear();mask.clear();slices.clear();CHECK_THROWS(call());
+  ids={1};mask={0};auto text=call();CHECK(text.mm.ple_token_ids.Ptr<int32_t>()[0]==1);
+  CHECK_FALSE(vllm::ModelRegistry::SupportsMmInputs(model));
+  // Default-compatible readiness contract, same production hook pointers.
+  vllm::ModelFactory factory{};
+  const vllm::ModelRegistration other{"Gemma4ForConditionalGeneration",&factory,{}};
+  vllm::Gemma4LoadedModel legacy(other,vllm::Gemma4Weights{});
+  CHECK(factory.mm_inputs_ready);
+  CHECK_FALSE(vllm::ModelRegistry::SupportsMmInputs(legacy));
+  factory.encode_mm=vllm::kGemma4MmHooks.encode_mm;
+  CHECK_FALSE(vllm::ModelRegistry::SupportsMmInputs(legacy));
+  factory.embed_mm=vllm::kGemma4MmHooks.embed_mm;
+  CHECK(vllm::ModelRegistry::SupportsMmInputs(legacy));
+  factory.mm_inputs_ready=false;
+  CHECK_FALSE(vllm::ModelRegistry::SupportsMmInputs(legacy));
 }

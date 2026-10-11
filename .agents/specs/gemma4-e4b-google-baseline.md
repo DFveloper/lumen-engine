@@ -1002,3 +1002,20 @@ actual-flags header consumers. Scratch assets/work/2026-10-10-e4b-embedding-merg
 is capped at 256 MiB, external TMPDIR/Git ceiling, -j2, stop below 4 GiB free.
 Full preflight, GPU, weights, installs and remote operations prohibited. T03,
 T04, T06, device BF16, original oracle and served-runtime acceptance pending.
+
+### Shared merge implementation evidence
+
+Fresh RED after 7489c1de9: loader 44/45 cases, one valid-input exception at
+missing embed_mm, 7146 passing assertions; frontend 5/5225 PASS. GREEN:
+46/7194 loader, 5/5225 frontend, 28 metadata, exact-count CTest 2/2, 144 actual
+flags consumers PASS. Production hook dispatch now returns owned BF16 merged
+embeddings and I32 PLE ids; readiness remains false. Ordered offset slices,
+independent text/audio values, PLE masking and malformed represented inputs
+are tested. Original-span validation remains upstream and unproven here.
+
+Actual production registry TU compiles but bounded linking fails on decoder,
+resident-expert and KV-spec dependencies; see factory-link.log. No stubs or
+full-library build. Thus full factory resolution/ForwardMm execution is not
+claimed. Evidence/reproduction: assets/work/2026-10-10-e4b-embedding-merge.
+Await root verification and fresh review. T03/T04/T06, production device BF16,
+original oracle, served runtime and full preflight remain pending.

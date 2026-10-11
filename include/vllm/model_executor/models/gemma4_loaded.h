@@ -20,8 +20,10 @@ class Gemma4LoadedModel final : public LoadedModel {
   const Gemma4Weights* weights_ = nullptr;
 };
 
-// The production factory starts from these hooks; no merge capability yet.
+// Production hooks; CPU reference dispatch is not runner readiness.
 extern const ModelFactory kGemma4MmHooks;
+MmForwardBuffers EmbedMmGemma4(LoadedModel&, const HfConfig&, vt::Queue&,
+                              const MmEmbedInputs&);
 
 MmEncoderOutput EncodeMmGemma4Audio(LoadedModel&, const HfConfig&, vt::Queue&,
     const multimodal::MultiModalFeatureSpec&);
