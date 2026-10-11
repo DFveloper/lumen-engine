@@ -919,3 +919,15 @@ served capability and T03/T04/T06. No GPU, weights, installation or remote
 operation. Existing untracked plans remain untouched. This is a new corrective
 chronology only; status remains awaiting independent review, process gap NOT
 waived.
+
+Corrective RED captured before repair: run.py red freshly compiled and linked
+both actual test targets (max two compiler processes), then each executable
+returned 1. Frontend: 0/5 cases pass, 11/16 assertions pass; all five fail at
+explicit missing frontend/shared FFT exceptions on valid input. Loader:
+44/45 cases pass, 7139/7140 assertions pass; only the waveform-consumer case
+fails at the frontend refusal. Thus existing loader behavior remains green
+while required missing functionality is RED, without broken includes or links.
+Logs and exact red patch are in the correction evidence directory. Invalid-input
+CHECK_THROWS passing under blanket refusal proves no validation guarantee;
+only valid-input failures constitute this RED evidence. No repair has yet been
+applied, and historical missing RED remains unsatisfied.
