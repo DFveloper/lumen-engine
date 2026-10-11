@@ -1147,3 +1147,25 @@ external TMPDIR/Git ceiling. Retain image, audio 5/5225, loader 46/7196 and
 metadata 28; actual-flags headers, records/anchors/style/trailers. Full preflight
 prohibited by task, pending. No installation, GPU, weights or remote operation.
 Full HF processor, vision execution and served claims remain pending.
+
+### T04B implementation evidence — awaiting root verification and fresh review
+
+Spec 391a75659 preceded behavioral RED: actual target built after correcting a
+CAPTURE macro compile error; actual tests executable refused valid resize.
+RED 2/4 cases, 137/138 assertions passing, no skips. Wrong-path attempt and
+compile error are not counted as RED. Implemented bounded private tensor AA
+kernel; shared Pillow and normalization unchanged. ProcessImageRGB routes to
+the production ProcessImage implementation. Identity path remains unchanged.
+Independent pinned Torch CPU fixtures check every resized byte and exact float
+rescaling through patches, then positions/padding/count via actual tower input
+validator. Nine fixtures, all budgets; fixture README records source pins,
+hashes, generation and version qualification. No threshold relaxation.
+
+GREEN 4 cases/201 assertions, loader 46/7196, audio 5/5225, metadata 28;
+exact-count CTest 3/3. Six actual-flags header consumers pass. Records and
+anchors pass; whitespace checked. No clang-format available. Kernel uses one
+accumulator row rather than input-height*output-width temporary; existing
+65536-axis/64Mi-pixel bounds apply before allocation. Coefficients bounded by
+O(input axes + output axes); output <=31MiB patches plus <=8MiB resized bytes.
+Evidence: assets/work/2026-10-10-e4b-image-resize. Full preflight prohibited and
+pending. Full HF processor, numerical vision and serving remain pending.

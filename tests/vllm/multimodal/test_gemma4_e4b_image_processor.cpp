@@ -3,6 +3,9 @@
 #include <array>
 #include "vllm/model_executor/models/gemma4_vision.h"
 #include <limits>
+#include <cmath>
+#include <fstream>
+#include <iterator>
 #include <vector>
 #include "vllm/multimodal/gemma4_image_processor.h"
 
@@ -68,8 +71,7 @@ TEST_CASE("Gemma4 pinned geometry and fail closed decoded input") {
   std::vector<uint8_t> wrong(768*768*3+1);
   CHECK_THROWS(p.ProcessImage(wrong,768,768));
   std::vector<uint8_t> resize(48*48*3);
-  CHECK_THROWS_WITH(p.ProcessImage(resize,48,48),
-                    "Gemma4 requires unsupported torchvision bicubic antialias resize");
+  CHECK(p.ProcessImage(resize,48,48).num_soft_tokens == 256);
   for(int n : {0,-1,69,71,256,281,1121}) CHECK_THROWS(Gemma4ImageProcessor(n));
 }
 
@@ -97,4 +99,37 @@ TEST_CASE("Gemma4 tower boundary rejects malformed processed patches") {
   CHECK_THROWS(ValidateGemma4VisionInput(pixels,positions,0,cfg));
   CHECK_THROWS(ValidateGemma4VisionInput(pixels,positions,std::numeric_limits<int64_t>::max(),cfg));
   std::fill(positions.begin(),positions.end(),-1); CHECK_THROWS(validate());
+}
+
+TEST_CASE("Gemma4 independent CPU Torch uint8 resize goldens") {
+  struct Golden { int64_t budget,h,w,oh,ow; uint64_t hash; };
+  const Golden cases[] = {
+#include "gemma4_resize_golden.inc"
+  };
+  for (const auto g : cases) {
+    CAPTURE(g.budget); CAPTURE(g.h); CAPTURE(g.w);
+    std::vector<uint8_t> rgb(g.h*g.w*3);
+    for(int64_t y=0;y<g.h;++y) for(int64_t x=0;x<g.w;++x)
+      for(int c=0;c<3;++c) rgb[(y*g.w+x)*3+c]=c==0 ? (x<g.w/2?0:255) : (y*7+x*13+c*83)%256;
+    const auto a=Gemma4ImageProcessor(g.budget).ProcessImageRGB(rgb,g.h,g.w);
+    std::ifstream file(std::string(E4B_RESIZE_FIXTURES)+"/"+std::to_string(g.budget)+"-"+
+                       std::to_string(g.h)+"-"+std::to_string(g.w)+".rgb", std::ios::binary);
+    REQUIRE(file.is_open());
+    const std::vector<uint8_t> expected((std::istreambuf_iterator<char>(file)), {});
+    REQUIRE(expected.size()==static_cast<size_t>(g.oh*g.ow*3));
+    uint64_t hash=14695981039346656037ULL;
+    bool exact=true;
+    for(int64_t y=0;y<g.oh;++y) for(int64_t x=0;x<g.ow;++x)
+      for(int c=0;c<3;++c) {
+        const float f=a.patches.pixel_values_f32[((y/16)*(g.ow/16)+x/16)*768+(y%16)*48+(x%16)*3+c];
+        const auto b=static_cast<uint8_t>(std::lround(f*255));
+        exact &= b==expected[(y*g.ow+x)*3+c];
+        exact &= f==static_cast<float>(expected[(y*g.ow+x)*3+c])*(1.0f/255.0f);
+        hash=(hash^b)*1099511628211ULL;
+      }
+    CHECK(hash==g.hash); CHECK(exact);
+    CHECK(a.num_soft_tokens==g.oh*g.ow/2304);
+    CHECK(a.patches.image_grid_thw==std::array<int64_t,3>{1,g.oh/16,g.ow/16});
+    CHECK(ValidateGemma4VisionInput(a.patches.pixel_values_f32,a.position_ids,a.patches.num_patches,Gemma4VisionConfig{})==g.oh*g.ow/256);
+  }
 }

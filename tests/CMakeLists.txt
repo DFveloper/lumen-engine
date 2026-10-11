@@ -4811,6 +4811,8 @@ target_include_directories(test_gemma4_e4b_image_processor PRIVATE ${CMAKE_SOURC
 target_link_libraries(test_gemma4_e4b_image_processor PRIVATE vllm_test_main)
 vllm_cpp_set_warnings(test_gemma4_e4b_image_processor)
 add_test(NAME test_gemma4_e4b_image_processor COMMAND test_gemma4_e4b_image_processor)
+target_compile_definitions(test_gemma4_e4b_image_processor PRIVATE
+  E4B_RESIZE_FIXTURES="${CMAKE_SOURCE_DIR}/tests/fixtures/gemma4_e4b_resize")
 set_tests_properties(test_gemma4_e4b_image_processor PROPERTIES
-  PASS_REGULAR_EXPRESSION "test cases: +3 [|] +3 passed [|] +0 failed [|] +0 skipped"
+  PASS_REGULAR_EXPRESSION "test cases: +4 [|] +4 passed [|] +0 failed [|] +0 skipped"
   FAIL_REGULAR_EXPRESSION "Status: FAILURE")
