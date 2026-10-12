@@ -77,6 +77,10 @@ The oracle guard requires 20 GiB free; the operator measured 18.75 GiB, so that 
 
 ## Owed
 
+T03C5 tokenizer bridge is not wired into serving or prompt timing. T10 under
+MODEL-MM-gemma4-mm-gemma4-for-conditional-generation owns that integration;
+The row-owned T03C5 issue remains open for this staged obligation.
+
 The OPEN milestone issue owns the original-checkpoint baseline and its remaining gates. Numeric processor and tower tolerances are PENDING upstream-test enumeration or independent oracle repeatability measurement. Freeze justified values before accepting C++ comparisons. Do not invent numeric bars. Exact integer identity and zero token divergence remain the default requirements.
 
 Original checkpoint hashes, complete tensor inventory, primary-oracle gateability, processor fixtures, runtime dtypes, device execution, and production-call-site mutations remain PENDING. Environment-dependent gates remain PENDING until explicit resource and environment authority exists. Missing values are not defaults.
@@ -1816,3 +1820,39 @@ special enumeration, ambiguous acceptance and prompt forwarding as budget permit
 Evidence and commands: assets/work/2026-10-11-e4b-tokenizer-bridge/README.md.
 No network/GPU/install/weights/full preflight/full library/push/PR/merge/agents.
 Root verification and fresh review follow the committed implementation SHA.
+
+### T03C5 implementation evidence — root and fresh review pending
+
+Prospective017ec82b0 precedes the inert bridge. Actual-provider budget gate
+compiled tokenizer2166640, bpe377360, pretokenizer122120, unicode_data79272
+bytes and linked5235136 bytes using the27 existing parser providers, seven
+existing test TUs, new bridge/test TUs, real test main and template GGUF/mapping
+objects in place. No fake symbols, omitted factory branches or libvllm.
+The final closure adds five production TUs and one test TU, reusing two real
+GGUF providers. CMake explicitly lists the new bridge in the production target.
+Unix Makefiles reuse template object paths; other generators use the real
+GGUF/mapping sources. Only the existing Unix Makefiles lane was executed.
+
+Initial missing FromHfJsonBytes diagnostic argument and vexing parse were
+compile setup errors, not RED. HF JSON rejects empty vocabulary strings;
+the first executable failed two fixture loads and one intended ambiguity check,
+not a valid whole-suite RED. Removing that invalid entry BEFORE implementation
+produced43/6318 with34 failed assertions. After implementation,12 failures
+exposed an invalid fixture reuse: boundary scenarios reused a live parser rather
+than constructing one parser per independent request. Correcting that setup
+produced43/6319, zero skips. Original RED is mixed, not clean first-pass TDD;
+no postfix rollback was used. Real decode/map/special/ambiguity failures precede
+implementation, as do first open-prompt failures. Explicit prompt reset coverage
+remains on the same parser after a completed close/content sequence.
+
+Six CPU targets pass: loader46/7196, audio5/5225, image4/201, vision5/1172,
+template48/415, parser43/6319;28 metadata and two actual-flags new-header
+consumers pass. Five compiled mutants fail unfiltered: decode-as-stored2,
+missing markers22, all-added-special2, ambiguous acceptance1, prompt forwarding44.
+Final restored scratch closure43/6319 passes with zero skips. Nine retained
+source hashes match. Full preflight remains prohibited/PENDING.
+Evidence: assets/work/2026-10-11-e4b-tokenizer-bridge/README.md.
+The bridge is caller-owned and immutable by contract; no serving stack bridge,
+HTTP test, original Google tokenizer claim or owning context was introduced.
+SupportsMmInputs remains false. Root exact-SHA verification and fresh review
+are still required; this is not full T03/T10 or readiness acceptance.

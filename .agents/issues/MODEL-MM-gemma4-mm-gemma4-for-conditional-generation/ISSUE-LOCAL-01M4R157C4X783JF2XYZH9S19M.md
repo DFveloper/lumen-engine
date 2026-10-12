@@ -17,3 +17,10 @@ T03C5 requires a borrowed immutable tok::Tokenizer bridge with an unambiguous vo
 ## Resolution
 
 -
+
+## Bounded implementation evidence
+
+T03C5 bridge passes43/6319 with real providers, six CPU targets,28 metadata,
+five compiled mutations and two header consumers. Root verification and fresh
+review pending. Remains OPEN for T10 serving wiring/prompt timing, explicitly
+excluded from this bounded borrowed-bridge change. No readiness claim.

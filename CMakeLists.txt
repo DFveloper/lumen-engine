@@ -1430,6 +1430,7 @@ add_library(vllm STATIC
   src/vllm/entrypoints/openai/reasoning_parsers/muse_glimmer.cpp
   src/vllm/entrypoints/openai/reasoning_parsers/kolibri1.cpp
   src/vllm/parser/engine/incremental_lexer.cpp
+  src/vllm/parser/engine/tokenizer_bridge.cpp
   src/vllm/parser/engine/token_id_scanner.cpp
   src/vllm/parser/engine/streaming_parser_engine.cpp
   src/vllm/parser/engine/configs.cpp

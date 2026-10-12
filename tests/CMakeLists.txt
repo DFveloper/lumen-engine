@@ -4889,6 +4889,12 @@ set_tests_properties(test_gemma4_e4b_template PROPERTIES
 
 # Bounded real-provider factory gate; no libvllm or tool-factory substitution.
 add_executable(test_gemma4_e4b_reasoning_end
+  ../src/vllm/parser/engine/tokenizer_bridge.cpp
+  ../src/vllm/tokenizer/tokenizer.cpp
+  ../src/vllm/tokenizer/bpe.cpp
+  ../src/vllm/tokenizer/pretokenizer.cpp
+  ../src/vllm/tokenizer/unicode_data.cpp
+  vllm/parser/test_tokenizer_bridge.cpp
   ../src/vllm/entrypoints/openai/reasoning_parsers/request.cpp
   vllm/parser/test_gemma4_e4b_request.cpp
   vllm/entrypoints/openai/reasoning_parsers/test_qwen3.cpp
@@ -4923,6 +4929,20 @@ add_executable(test_gemma4_e4b_reasoning_end
   ../src/vllm/parser/engine/token_id_scanner.cpp
   ../src/vllm/entrypoints/openai/tool_parsers/utils.cpp
   ../src/vllm/entrypoints/openai/tool_parsers/abstract.cpp)
+# Reuse the template gate's real GGUF providers in the bounded Makefiles lane.
+# Other generators compile the same real sources rather than guessing paths.
+if(CMAKE_GENERATOR STREQUAL "Unix Makefiles")
+  foreach(provider gguf_reader read_only_file_mapping)
+    set(provider_object "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/test_gemma4_e4b_template.dir/__/src/vllm/model_executor/model_loader/${provider}.cpp${CMAKE_CXX_OUTPUT_EXTENSION}")
+    set_source_files_properties("${provider_object}" PROPERTIES EXTERNAL_OBJECT TRUE GENERATED TRUE)
+    target_sources(test_gemma4_e4b_reasoning_end PRIVATE "${provider_object}")
+  endforeach()
+  add_dependencies(test_gemma4_e4b_reasoning_end test_gemma4_e4b_template)
+else()
+  target_sources(test_gemma4_e4b_reasoning_end PRIVATE
+    ../src/vllm/model_executor/model_loader/gguf_reader.cpp
+    ../src/vllm/model_executor/model_loader/read_only_file_mapping.cpp)
+endif()
 target_include_directories(test_gemma4_e4b_reasoning_end PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_gemma4_e4b_reasoning_end PRIVATE vllm_test_main)
 if(MSVC)
@@ -4939,6 +4959,6 @@ endif()
 vllm_cpp_set_warnings(test_gemma4_e4b_reasoning_end)
 add_test(NAME test_gemma4_e4b_reasoning_end COMMAND test_gemma4_e4b_reasoning_end)
 set_tests_properties(test_gemma4_e4b_reasoning_end PROPERTIES
-  PASS_REGULAR_EXPRESSION "test cases: +40 [|] +40 passed [|] +0 failed [|] +0 skipped"
+  PASS_REGULAR_EXPRESSION "test cases: +43 [|] +43 passed [|] +0 failed [|] +0 skipped"
   FAIL_REGULAR_EXPRESSION "Status: FAILURE"
   ENVIRONMENT "VT_CPU_THREADS=1")
