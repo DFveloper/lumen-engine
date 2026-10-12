@@ -1746,3 +1746,73 @@ No clang-format executable was used. Full preflight prohibited/PENDING.
 Request kwargs differ from template defaults merged inside MakeChatTemplatePromptFn:
 that closure ignores null/'auto' overrides. No merged-default parity is claimed.
 Full T03B/T03/T10, original tokenizer/weights and readiness remain false/pending.
+
+### T03C4 accepted scope and T03C5 prospective tokenizer bridge
+
+Root rootbg8916 accepted six CPU targets and28 metadata at c8d9c1528.
+Fresh reviewer f839 passed42/7680 with zero skips and seven compiled kills.
+Mutants deliberately filtered2/1445 with40 excluded, not zero-skip runs.
+Evidence: assets/work/2026-10-11-e4b-reasoning-kwargs-review/README.md.
+The original RED remains mixed:48 genuine failures plus20 bad-fixture
+failures. The postfix replay is sensitivity, not a clean first-pass RED.
+
+T03C5 is authorized by ISSUE-LOCAL-01M4R157C4X783JF2XYZH9S19M.
+Add a production borrowed EngineTokenizer adapter for tok::Tokenizer.
+Caller owns the immutable tokenizer and bridge longer than the parser; neither
+may be moved or replaced while borrowed. No owning parser context, serving
+change, prompt-timing integration, download or original-Google vocabulary claim.
+SupportsMmInputs remains false. T03B, T10 and full readiness remain pending.
+
+Local adapter behavior derives from
+`include/vllm/parser/engine/token_id_scanner.h::EngineTokenizer` and
+`src/vllm/tokenizer/tokenizer.cpp::Tokenizer::FinalizeTables`,
+`src/vllm/tokenizer/tokenizer.cpp::Tokenizer::Decode`,
+`src/vllm/tokenizer/tokenizer.cpp::Tokenizer::HasToken` and
+`src/vllm/tokenizer/tokenizer.cpp::Tokenizer::IsSpecial`.
+Iterate [0,VocabSize), skipping !HasToken; store TokenText in a stable const
+map, delegate singleton Decode, and enumerate final IsSpecial state in ID order.
+HasToken currently excludes empty stored strings, so the bridge excludes them
+rather than inventing valid empty tokens. Unknown IDs retain Decode exceptions.
+Reject identical text across distinct assigned IDs: an explicitly approved local
+inverse-map safety restriction, NOT an upstream duplicate-vocabulary policy.
+Repeated same-ID added records use final IsSpecial, not AddedTokens history.
+
+Retained nine Python sources remain pinned to vLLM
+a7c23ac96d7806e7c7e7d862eadbce5a33529b94; verify their manifest offline.
+They specify existing parser prompt/scanner behavior, not the local bridge.
+Synthetic genuine HF JSON follows
+`tests/vllm/test_tokenizer_metaspace_split.cpp::MakeJson` schema and loads with
+Tokenizer::FromHfJsonBytes. Test metaspace, byte fallback, literal added tokens,
+holes, unknown IDs, final specials and ambiguous inverse-map rejection.
+Exercise the explicit-thinking borrowed factory and ABC prompt hook with Gemma's
+first small Sure before the closer, both modes, boundaries, reset, and scanner
+drop behavior. No fake tokenizer, fake provider or replaced factory symbol.
+
+Before behavioral RED, measure actual full-provider compile/link feasibility.
+Reuse in place the existing27 production objects, seven test TUs and real
+vllm_test_main from test_gemma4_e4b_reasoning_end. Compile four real tokenizer
+providers (tokenizer, bpe, pretokenizer, unicode_data) with actual target flags.
+Reuse template gguf_reader and read_only_file_mapping objects without copying;
+choose minimal portable CMake integration only after this gate. Include bridge
+and test objects in the budget. No libvllm build, branch deletion or fake closure.
+An inert bridge may have the final API, return empty decode/vocab/special lists,
+and retain the borrowed reference solely to enable executable behavioral RED.
+It must not implement correct behavior before the first executable test.
+Existing correct behavior is regression coverage; scratch mutation is not new RED.
+Compile/link errors are setup failures and must be repaired within budget.
+
+Resource entry219315142 bytes; shared build baseline143465952. Charge positive
+shared growth plus new scratch and evidence growth. Exact writer ceiling239075328
+preserves20MiB review and8MiB unsampled allowance under268435456. Monitor at250ms
+from before setup, including TMPDIR, objects and link transients; stop below4GiB
+free or before predicted breach. Serial compile/link preferred, maximum-j2.
+A genuine budget blocker stops before broad builds with exact observed and
+predicted bytes and preserved evidence, without claiming RED/GREEN.
+
+If feasible: six bounded CPU targets with exact adapted counts and zero skips,
+28 metadata tests, actual-flags consumers and record/anchor/style/trailer checks.
+Sequential compiled mutations cover decode-as-TokenText, missing markers,
+special enumeration, ambiguous acceptance and prompt forwarding as budget permits.
+Evidence and commands: assets/work/2026-10-11-e4b-tokenizer-bridge/README.md.
+No network/GPU/install/weights/full preflight/full library/push/PR/merge/agents.
+Root verification and fresh review follow the committed implementation SHA.
