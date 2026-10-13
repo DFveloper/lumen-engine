@@ -1638,7 +1638,7 @@ owns the remaining wiring under this spec's T03/T10 scope. Full T03/T03B/T10,
 original weights and full preflight remain owed; readiness remains false.
 Root verification and fresh independent review follow the implementation commit.
 
-### T03C3 implementation evidence — awaiting root and fresh review
+### T03C3 implementation evidence — accepted
 
 Prospective5fdbca989 preceded actual-provider linking and both executable REDs.
 Registry RED:16 cases/5431 assertions,2 failures,zero skips. With registration
@@ -1660,14 +1660,12 @@ are older-pin regression coverage, not new-pin parity. Real closure adds13
 reasoning TUs to the existing13 providers, without libvllm/stubs or duplicated
 provider targets. Four compiled scratch mutants fail assertions: substituted
 registration1, removed forwarding24, disabled skip guard28, missing restoration2.
-These are writer sensitivity checks; fresh independent review remains owed.
 
-Evidence and exact commands: assets/work/2026-10-11-e4b-reasoning-adapter/README.md.
-Resource monitoring includes shared build growth, scratch and transient files;
-review reserve remains intact. No full preflight, serving edits, tokenizer bridge,
-request kwargs interpretation, original-token/weight or HTTP claim. T03B/full
-T03/T10 and full readiness remain pending. Root verification and fresh independent
-review must assess the immutable implementation commit before acceptance.
+Root bg818 accepted at02a73685. Fresh reviewer d476e952 PASS41/6286, seven
+compiled mutants killed, nine retained source hashes verified.
+Evidence: assets/work/2026-10-11-e4b-reasoning-adapter/README.md.
+Review evidence: assets/work/2026-10-11-e4b-reasoning-adapter-review/README.md.
+T03B/full T03/T10 and full readiness remain pending.
 
 ### T03C4 prospective request-aware reasoning construction
 
@@ -1719,7 +1717,7 @@ and syntax-compiled, NOT end-to-end HTTP or served reasoning. Full T03B/T03/T10,
 original tokenizer/weights, full preflight and readiness remain false/pending.
 Root exact-SHA verification and separate fresh review follow the code commit.
 
-### T03C4 implementation evidence — root and fresh review pending
+### T03C4 implementation evidence — accepted
 
 Prospective71ef7af7b preceded inert production API and test compilation.
 Initial setup bg862 failed on a two-argument doctest CAPTURE; no RED claimed.
@@ -1821,7 +1819,7 @@ Evidence and commands: assets/work/2026-10-11-e4b-tokenizer-bridge/README.md.
 No network/GPU/install/weights/full preflight/full library/push/PR/merge/agents.
 Root verification and fresh review follow the committed implementation SHA.
 
-### T03C5 implementation evidence — root and fresh review pending
+### T03C5 implementation evidence — accepted
 
 Prospective017ec82b0 precedes the inert bridge. Actual-provider budget gate
 compiled tokenizer2166640, bpe377360, pretokenizer122120, unicode_data79272
@@ -1852,7 +1850,12 @@ missing markers22, all-added-special2, ambiguous acceptance1, prompt forwarding4
 Final restored scratch closure43/6319 passes with zero skips. Nine retained
 source hashes match. Full preflight remains prohibited/PENDING.
 Evidence: assets/work/2026-10-11-e4b-tokenizer-bridge/README.md.
+
+Root bg966 accepted at 766ffea2. Fresh reviewer 35e9e8bb PASS: 46/6518,
+five compiled mutants killed (3 cases, 43 filtered, special-enumeration 82
+assertions fatal). Review evidence:
+assets/work/2026-10-11-e4b-tokenizer-bridge-review/README.md.
+
 The bridge is caller-owned and immutable by contract; no serving stack bridge,
 HTTP test, original Google tokenizer claim or owning context was introduced.
-SupportsMmInputs remains false. Root exact-SHA verification and fresh review
-are still required; this is not full T03/T10 or readiness acceptance.
+SupportsMmInputs remains false. T03B, T10 and full readiness remain pending.
