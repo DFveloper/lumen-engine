@@ -1858,7 +1858,7 @@ assets/work/2026-10-11-e4b-tokenizer-bridge-review/README.md.
 
 The bridge is caller-owned and immutable by contract; no serving stack bridge,
 HTTP test, original Google tokenizer claim or owning context was introduced.
-SupportsMmInputs remains false. T03B accepted. T10 and full readiness remain pending.
+SupportsMmInputs remains false. T03B/T03D accepted. T10 and full readiness remain pending.
 
 ## T03B: config.json special token ID parity (accepted)
 
@@ -1914,10 +1914,10 @@ Tokenizer vocab entries for parser markers (`<|channel>`, `<channel|>`,
 the tokenizer, not config.json fields. Span overlap/ordering/provenance.
 Serving integration. Full preflight.
 
-## T03D: video token replacement sequence (prospective)
+## T03D: video token replacement sequence (accepted)
 
 Owning issue: ISSUE-LOCAL-01M4VPQYYNYHKHYBMA5S203KAH
-State: prospective
+State: accepted (1d01f933b, reviewer 3cec0fd8 PASS, 5 mutants)
 
 ### Gap
 
