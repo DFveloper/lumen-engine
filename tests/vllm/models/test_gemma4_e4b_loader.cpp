@@ -206,6 +206,26 @@ TEST_CASE("E4B loader: head rejection uses original E4B config dimensions") {
                     doctest::Contains("lm_head.weight"));
 }
 
+TEST_CASE("E4B config: special token IDs match real Google fixture") {
+  const auto c0 = vllm::LoadHfConfig(E4B_CONFIG_PATH);
+  const auto ids = vllm::Gemma4SpecialTokenIds(c0);
+  CHECK(ids.audio_token_id == 258881);
+  CHECK(ids.boa_token_id == 256000);
+  CHECK(ids.boi_token_id == 255999);
+  CHECK(ids.eoa_token_id == 258883);
+  CHECK(ids.eoa_token_index == 258883);
+  CHECK(ids.eoi_token_id == 258882);
+  CHECK(ids.image_token_id == 258880);
+  CHECK(ids.video_token_id == 258884);
+  CHECK(ids.bos_token_id == 2);
+  CHECK(ids.pad_token_id == 0);
+  CHECK(ids.vocab_size == 262144);
+  // eos_token_id is a list at top level [1, 106]
+  CHECK(ids.eos_token_ids.size() == 2);
+  CHECK(ids.eos_token_ids[0] == 1);
+  CHECK(ids.eos_token_ids[1] == 106);
+}
+
 namespace {
 const std::string vision_proj = "model.embed_vision.embedding_projection.weight";
 const std::string audio_proj = "model.embed_audio.embedding_projection.weight";
