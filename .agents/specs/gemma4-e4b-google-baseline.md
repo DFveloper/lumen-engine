@@ -1913,3 +1913,64 @@ Tokenizer vocab entries for parser markers (`<|channel>`, `<channel|>`,
 `<|tool_call>`, `<|turn>`, `<|tool_response>`) — those are added tokens in
 the tokenizer, not config.json fields. Span overlap/ordering/provenance.
 Serving integration. Full preflight.
+
+## T03D: video token replacement sequence (prospective)
+
+Owning issue: ISSUE-LOCAL-01M4VPQYYNYHKHYBMA5S203KAH
+State: prospective
+
+### Gap
+
+The Python `get_video_repl` in `gemma4_mm.py:412-447` builds the
+interleaved token sequence for video frames. For each frame it formats
+an `mm:ss` timestamp, encodes the prefix string via the tokenizer,
+then appends `boi_token_id`, `video_token_id * N`, `eoi_token_id`.
+The C++ side has no equivalent.
+
+### Algorithm (from Python source)
+
+```
+for i, (ts, n_tokens) in enumerate(zip(timestamps, num_soft_tokens_per_frame)):
+    minutes = int(ts // 60)
+    seconds = int(ts % 60)
+    ts_str = f"{minutes:02d}:{seconds:02d}"
+    prefix = f" {ts_str} " if i > 0 else f"{ts_str} "
+    ts_token_ids = tokenizer.encode(prefix, add_special_tokens=False)
+    all_token_ids.extend(ts_token_ids)
+    all_token_ids.append(boi_token_id)
+    all_token_ids.extend([video_token_id] * n_tokens)
+    all_token_ids.append(eoi_token_id)
+```
+
+Constants:
+- `_VIDEO_MAX_SOFT_TOKENS = 70` (soft tokens per video frame)
+- `_VIDEO_MAX_FRAMES = 32` (max sampled frames per video)
+
+### Scope
+
+Add a C++ function that builds the video replacement token ID sequence.
+The function takes:
+- `std::vector<double> timestamps` — frame timestamps in seconds
+- `std::vector<int32_t> num_soft_tokens_per_frame` — soft token count per frame
+- `int32_t boi_token_id`, `eoi_token_id`, `video_token_id`
+- `std::function<std::vector<int32_t>(std::string_view)> encode` — text-to-token-ID callback
+
+Returns `std::vector<int32_t>` — the full replacement sequence.
+
+The encode callback abstracts the tokenizer so the test can use a
+simple mock (e.g., per-character ASCII encoding). No real tokenizer
+files are needed.
+
+### Test cases
+
+1. Single frame at t=0: produces `encode("00:00 ") + [boi, video*N, eoi]`
+2. Two frames at t=0 and t=5: produces `encode("00:00 ") + [boi, video*N1, eoi] + encode(" 00:05 ") + [boi, video*N2, eoi]`
+3. Timestamp formatting: 65 seconds → `01:05`, 0 seconds → `00:00`, 125 seconds → `02:05`
+4. Empty frames list → empty result
+5. Timestamp with fractional seconds: int truncation (e.g., 5.7 → `00:05`)
+
+### Out of scope
+
+Frame sampling/extraction from video data. Video pixel processing.
+Vision tower forward pass for video frames. Serving integration.
+Real tokenizer encoding. Span overlap/provenance.
