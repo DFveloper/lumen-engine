@@ -333,4 +333,29 @@ v1::KVCacheConfig MakeGemma4ForConditionalGenerationKVCache(const HfConfig& conf
                                                             int block_size,
                                                             int num_blocks);
 
+// T03B: typed read-only view of the Gemma-4 multimodal special token IDs from
+// the wrapper config.json. The eight multimodal soft-token IDs and the
+// `eos_token_id` array live at the top level of the ForConditionalGeneration
+// wrapper; `bos_token_id`, `pad_token_id` and `vocab_size` live under the
+// nested `text_config` sub-dict (the same split LoadHfConfig already resolves
+// for the typed text fields). This is a pure read of `config.raw`; it does not
+// change any serving/forwarding path.
+struct Gemma4SpecialTokenIds {
+  int32_t audio_token_id = 0;
+  int32_t boa_token_id = 0;
+  int32_t boi_token_id = 0;
+  int32_t eoa_token_id = 0;
+  int32_t eoa_token_index = 0;
+  int32_t eoi_token_id = 0;
+  int32_t image_token_id = 0;
+  int32_t video_token_id = 0;
+  int32_t bos_token_id = 0;
+  int32_t pad_token_id = 0;
+  int32_t vocab_size = 0;
+  // Top-level `eos_token_id` is a JSON array (e.g. [1, 106]).
+  std::vector<int32_t> eos_token_ids;
+
+  explicit Gemma4SpecialTokenIds(const HfConfig& config);
+};
+
 }  // namespace vllm

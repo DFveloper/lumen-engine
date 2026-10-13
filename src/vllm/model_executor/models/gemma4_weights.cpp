@@ -863,4 +863,26 @@ Gemma4Weights LoadGemma4ForConditionalGenerationWeightsOwned(
   return LoadImpl(*shards, config, std::shared_ptr<const void>(shards, shards.get()));
 }
 
+Gemma4SpecialTokenIds::Gemma4SpecialTokenIds(const HfConfig& config) {
+  const auto& raw = config.raw;
+  audio_token_id = raw.value("audio_token_id", int32_t(0));
+  boa_token_id = raw.value("boa_token_id", int32_t(0));
+  boi_token_id = raw.value("boi_token_id", int32_t(0));
+  eoa_token_id = raw.value("eoa_token_id", int32_t(0));
+  eoa_token_index = raw.value("eoa_token_index", int32_t(0));
+  eoi_token_id = raw.value("eoi_token_id", int32_t(0));
+  image_token_id = raw.value("image_token_id", int32_t(0));
+  video_token_id = raw.value("video_token_id", int32_t(0));
+  const auto& text = raw.contains("text_config") && raw["text_config"].is_object()
+                          ? raw["text_config"] : raw;
+  bos_token_id = text.value("bos_token_id", int32_t(0));
+  pad_token_id = text.value("pad_token_id", int32_t(0));
+  vocab_size = text.value("vocab_size", int32_t(0));
+  eos_token_ids.clear();
+  if (raw.contains("eos_token_id") && raw["eos_token_id"].is_array()) {
+    for (const auto& v : raw["eos_token_id"])
+      eos_token_ids.push_back(v.get<int32_t>());
+  }
+}
+
 }  // namespace vllm
