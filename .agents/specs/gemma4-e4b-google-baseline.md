@@ -1859,3 +1859,57 @@ assets/work/2026-10-11-e4b-tokenizer-bridge-review/README.md.
 The bridge is caller-owned and immutable by contract; no serving stack bridge,
 HTTP test, original Google tokenizer claim or owning context was introduced.
 SupportsMmInputs remains false. T03B, T10 and full readiness remain pending.
+
+## T03B: config.json special token ID parity (prospective)
+
+Owning issue: ISSUE-LOCAL-01M4VH638BS1P682RC4QMQD22Z
+State: prospective
+
+### Gap
+
+The real Google `tests/fixtures/gemma4_e4b_google/config.json` defines nine
+special token IDs that the Python model reads from `config` attributes
+(`boi_token_id`, `eoi_token_id`, `boa_token_id`, `eoa_token_id` /
+`eoa_token_index`, `image_token_id`, `audio_token_id`, `video_token_id`,
+`bos_token_id`, `eos_token_id`, `pad_token_id`). The C++ `HfConfig` struct
+has no typed fields for these; `ParseGemma4ForConditionalGenerationConfig`
+is a no-op. The loader test (line 197) validates `hidden_size`,
+`vocab_size`, and `num_hidden_layers` from the real config but does not
+validate any special token ID.
+
+### Scope
+
+Add typed read-only accessors for the Gemma-4 multimodal special token IDs
+from `config.raw`. Add a test case that loads the real config.json fixture
+and verifies each ID against its expected value. No production wiring,
+serving, or forwarding changes. No tokenizer vocabulary changes.
+
+### Expected values from the real fixture
+
+```
+audio_token_id: 258881
+boa_token_id: 256000
+boi_token_id: 255999
+eoa_token_id: 258883
+eoa_token_index: 258883
+eoi_token_id: 258882
+eos_token_id: [1, 106]
+image_token_id: 258880
+video_token_id: 258884
+bos_token_id: 2
+pad_token_id: 0
+vocab_size: 262144
+```
+
+### RED before fix
+
+A test that calls the accessor and checks the expected values must fail
+before the accessor exists. A missing target or compile failure is setup,
+not RED.
+
+### Out of scope
+
+Tokenizer vocab entries for parser markers (`<|channel>`, `<channel|>`,
+`<|tool_call>`, `<|turn>`, `<|tool_response>`) — those are added tokens in
+the tokenizer, not config.json fields. Span overlap/ordering/provenance.
+Serving integration. Full preflight.
