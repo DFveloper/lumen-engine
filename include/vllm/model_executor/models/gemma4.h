@@ -50,7 +50,9 @@
 #include "vllm/model_executor/models/gemma4_audio.h"
 #include <optional>
 #include <cstdint>
+#include <functional>
 #include <memory>
+#include <string_view>
 #include <vector>
 
 #include "vllm/model_executor/models/model_registry.h"
@@ -357,5 +359,19 @@ struct Gemma4SpecialTokenIds {
 
   explicit Gemma4SpecialTokenIds(const HfConfig& config);
 };
+
+// T03D: build the Gemma-4 video token replacement sequence for a list of frames.
+// Mirrors Python get_video_repl in gemma4_mm.py:412-447. For each frame i with
+// timestamp ts (seconds) and n soft tokens, emits encode(prefix) where prefix is
+// "MM:SS " for i==0 and " MM:SS " for i>0 (minutes=int(ts//60), seconds=int(ts%60),
+// both zero-padded to 2 digits), followed by boi, video repeated n times, eoi.
+// `encode` tokenizes the prefix string. Returns the concatenated token ids.
+// Throws (via VT_CHECK) if timestamps and num_soft_tokens_per_frame differ in
+// length. Empty inputs return an empty result.
+std::vector<int32_t> Gemma4VideoReplacement(
+    const std::vector<double>& timestamps,
+    const std::vector<int32_t>& num_soft_tokens_per_frame,
+    int32_t boi_token_id, int32_t eoi_token_id, int32_t video_token_id,
+    const std::function<std::vector<int32_t>(std::string_view)>& encode);
 
 }  // namespace vllm

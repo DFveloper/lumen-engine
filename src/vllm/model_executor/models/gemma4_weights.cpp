@@ -1,11 +1,14 @@
 // Weight loader: Gemma4 E4B PLE / 12B dense BF16 / 26B-A4B MoE BF16 fused experts.
 #include <cmath>
+#include <cstdio>
 // Experts are mmap-borrowed (30GB host cannot hold full BF16 MoE).
 #include "vllm/model_executor/models/gemma4.h"
 
 #include <cstring>
+#include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -883,6 +886,33 @@ Gemma4SpecialTokenIds::Gemma4SpecialTokenIds(const HfConfig& config) {
     for (const auto& v : raw["eos_token_id"])
       eos_token_ids.push_back(v.get<int32_t>());
   }
+}
+
+std::vector<int32_t> Gemma4VideoReplacement(
+    const std::vector<double>& timestamps,
+    const std::vector<int32_t>& num_soft_tokens_per_frame,
+    int32_t boi_token_id, int32_t eoi_token_id, int32_t video_token_id,
+    const std::function<std::vector<int32_t>(std::string_view)>& encode) {
+  VT_CHECK(timestamps.size() == num_soft_tokens_per_frame.size(),
+           "gemma4: video repl length mismatch");
+  std::vector<int32_t> all_token_ids;
+  for (size_t i = 0; i < timestamps.size(); ++i) {
+    const double ts = timestamps[i];
+    const int32_t n_tokens = num_soft_tokens_per_frame[i];
+    const int minutes = static_cast<int>(ts / 60.0);
+    const int seconds = static_cast<int>(std::fmod(ts, 60.0));
+    char ts_buf[8];
+    std::snprintf(ts_buf, sizeof(ts_buf), "%02d:%02d", minutes, seconds);
+    std::string prefix =
+        (i > 0) ? (std::string(" ") + ts_buf + " ") : (std::string(ts_buf) + " ");
+    auto ts_token_ids = encode(prefix);
+    all_token_ids.insert(all_token_ids.end(), ts_token_ids.begin(),
+                         ts_token_ids.end());
+    all_token_ids.push_back(boi_token_id);
+    all_token_ids.insert(all_token_ids.end(), n_tokens, video_token_id);
+    all_token_ids.push_back(eoi_token_id);
+  }
+  return all_token_ids;
 }
 
 }  // namespace vllm
