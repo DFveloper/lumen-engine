@@ -4962,3 +4962,27 @@ set_tests_properties(test_gemma4_e4b_reasoning_end PROPERTIES
   PASS_REGULAR_EXPRESSION "test cases: +43 [|] +43 passed [|] +0 failed [|] +0 skipped"
   FAIL_REGULAR_EXPRESSION "Status: FAILURE"
   ENVIRONMENT "VT_CPU_THREADS=1")
+
+# T03D: video token replacement sequence builder.
+add_executable(test_gemma4_e4b_video_repl
+  ../src/vllm/model_executor/models/gemma4_weights.cpp
+  vllm/parser/test_gemma4_e4b_video_repl.cpp)
+target_include_directories(test_gemma4_e4b_video_repl PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_gemma4_e4b_video_repl PRIVATE vllm_test_main)
+if(MSVC)
+  target_compile_options(test_gemma4_e4b_video_repl PRIVATE /Gy /Gw)
+  target_link_options(test_gemma4_e4b_video_repl PRIVATE /OPT:REF)
+else()
+  target_compile_options(test_gemma4_e4b_video_repl PRIVATE -ffunction-sections -fdata-sections)
+  if(APPLE)
+    target_link_options(test_gemma4_e4b_video_repl PRIVATE -Wl,-dead_strip)
+  else()
+    target_link_options(test_gemma4_e4b_video_repl PRIVATE -Wl,--gc-sections)
+  endif()
+endif()
+vllm_cpp_set_warnings(test_gemma4_e4b_video_repl)
+add_test(NAME test_gemma4_e4b_video_repl COMMAND test_gemma4_e4b_video_repl)
+set_tests_properties(test_gemma4_e4b_video_repl PROPERTIES
+  PASS_REGULAR_EXPRESSION "test cases: +7 [|] +7 passed [|] +0 failed [|] +0 skipped"
+  FAIL_REGULAR_EXPRESSION "Status: FAILURE"
+  ENVIRONMENT "VT_CPU_THREADS=1")
