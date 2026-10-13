@@ -1381,7 +1381,7 @@ All unrelated templates retain flattened strings. Even a whitespace-modified
 Google template is outside identity admission and retains its old parse error.
 Media payload fields remain opaque; only container/type/text shape is validated.
 Programmatic media without retained original content is refused. Raw media,
-T10 full-chain reachability, T03B token parity, T03C parsers, full T02/T03 and
+T10 full-chain reachability, T03B accepted, T03C parsers, full T02/T03 and
 runtime acceptance remain pending. Full preflight prohibited/PENDING.
 
 ### T03A F1 empty schema repair (prospective)
@@ -1464,7 +1464,7 @@ record/anchor/style/trailer/whitespace checks, not full preflight.
 
 No prompt hooks, reasoning registry, serving or text-tool parser changes.
 Preserve Gemma serving's deliberate text-tool branch and bare-call support.
-T03B token parity, T03C prompt state and served reasoning, T10, original weights
+T03B accepted. T03C prompt state and served reasoning, T10, original weights
 and full preflight remain pending; SupportsMmInputs remains false. Missing .env
 is not a CPU-slice blocker. Retain scoped helper role. Evidence goes in
 assets/work/2026-10-11-e4b-reasoning-end with exact commands and resources.
@@ -1546,7 +1546,7 @@ Review mutations must remove/move/repeat preparation, set flag before a reset
 hook, omit reset clearing/init protection, remove boundaries and gate on thinking.
 
 No registry, adapter routing, Gemma text-tool branch or HTTP prompt claim.
-T03B, served reasoning, T10, original weights and full preflight remain pending;
+T03B accepted. Served reasoning, T10, original weights and full preflight remain pending;
 readiness remains false. Retain helper role; full preflight prohibited, not rerun.
 Evidence: assets/work/2026-10-11-e4b-prompt-state (commands, red/green/resources).
 Max-j2, VT_CPU_THREADS=1, external TMPDIR and Git ceiling assets/work. Entry
@@ -1665,7 +1665,7 @@ Root bg818 accepted at02a73685. Fresh reviewer d476e952 PASS41/6286, seven
 compiled mutants killed, nine retained source hashes verified.
 Evidence: assets/work/2026-10-11-e4b-reasoning-adapter/README.md.
 Review evidence: assets/work/2026-10-11-e4b-reasoning-adapter-review/README.md.
-T03B/full T03/T10 and full readiness remain pending.
+T03B accepted. Full T03/T10 and full readiness remain pending.
 
 ### T03C4 prospective request-aware reasoning construction
 
@@ -1747,7 +1747,7 @@ Evidence: assets/work/2026-10-11-e4b-reasoning-kwargs/README.md.
 No clang-format executable was used. Full preflight prohibited/PENDING.
 Request kwargs differ from template defaults merged inside MakeChatTemplatePromptFn:
 that closure ignores null/'auto' overrides. No merged-default parity is claimed.
-Full T03B/T03/T10, original tokenizer/weights and readiness remain false/pending.
+Full T03/T10, original tokenizer/weights and readiness remain false/pending. T03B accepted.
 
 ### T03C4 accepted scope and T03C5 prospective tokenizer bridge
 
@@ -1858,12 +1858,12 @@ assets/work/2026-10-11-e4b-tokenizer-bridge-review/README.md.
 
 The bridge is caller-owned and immutable by contract; no serving stack bridge,
 HTTP test, original Google tokenizer claim or owning context was introduced.
-SupportsMmInputs remains false. T03B, T10 and full readiness remain pending.
+SupportsMmInputs remains false. T03B accepted. T10 and full readiness remain pending.
 
-## T03B: config.json special token ID parity (prospective)
+## T03B: config.json special token ID parity (accepted)
 
 Owning issue: ISSUE-LOCAL-01M4VH638BS1P682RC4QMQD22Z
-State: prospective
+State: accepted (fbca85528, reviewer 90aa862f PASS, 14 mutants)
 
 ### Gap
 
