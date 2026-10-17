@@ -50,7 +50,7 @@ MmEncoderOutput EncodeMmGemma4(LoadedModel& model, const HfConfig& config,
 }
 }  // namespace
 constinit const ModelFactory kGemma4MmHooks{.encode_mm = &EncodeMmGemma4,
-    .embed_mm = &EmbedMmGemma4, .mm_inputs_ready = false};
+    .embed_mm = &EmbedMmGemma4, .mm_inputs_ready = true};
 MmForwardBuffers EmbedMmGemma4(LoadedModel& model, const HfConfig& config,
     vt::Queue& queue, const MmEmbedInputs& in) {
   VT_CHECK(queue.device.type == vt::DeviceType::kCPU && !in.host_token_ids_stale,

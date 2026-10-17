@@ -1107,7 +1107,7 @@ TEST_CASE("E4B execution: shared registry dispatch reaches loaded audio and proj
   const auto& factory=vllm::kGemma4MmHooks;
   const vllm::ModelRegistration registration{"Gemma4ForConditionalGeneration",&factory,{}};
   vllm::Gemma4LoadedModel model(registration,std::move(weights));
-  CHECK_FALSE(vllm::ModelRegistry::SupportsMmInputs(model));
+  CHECK(vllm::ModelRegistry::SupportsMmInputs(model));
   vt::Queue queue{};
   vllm::multimodal::MultiModalFeatureSpec item;
   item.modality="audio"; item.length=2;
@@ -1342,7 +1342,7 @@ TEST_CASE("E4B preprocessing: waveform reaches loaded 128-mel encoder") {
   item.length=0;
   *item.audio_data=processor.ProcessWaveform(waveform.data(),160,16000);
   CHECK_THROWS_WITH(vllm::ModelRegistry::EncodeMm(model,c,q,item),doctest::Contains("no valid frames"));
-  CHECK_FALSE(vllm::ModelRegistry::SupportsMmInputs(model));
+  CHECK(vllm::ModelRegistry::SupportsMmInputs(model));
 }
 
 TEST_CASE("E4B merge: ordered chunk slices validation ownership and readiness") {
@@ -1399,8 +1399,7 @@ TEST_CASE("E4B merge: ordered chunk slices validation ownership and readiness") 
   ids.clear();mask.clear();slices.clear();CHECK_THROWS(call());
   ids={1};mask={0};auto text=call();CHECK(text.mm.ple_token_ids.Ptr<int32_t>()[0]==1);
   CHECK(text.mm.inputs_embeds.Ptr<uint16_t>()[0]==0x3f3d);
-  CHECK_FALSE(vllm::ModelRegistry::SupportsMmInputs(model));
-  // Default-compatible readiness contract, same production hook pointers.
+  CHECK(vllm::ModelRegistry::SupportsMmInputs(model));
   vllm::ModelFactory factory{};
   const vllm::ModelRegistration other{"Gemma4ForConditionalGeneration",&factory,{}};
   vllm::Gemma4LoadedModel legacy(other,vllm::Gemma4Weights{});
@@ -1412,4 +1411,22 @@ TEST_CASE("E4B merge: ordered chunk slices validation ownership and readiness") 
   CHECK(vllm::ModelRegistry::SupportsMmInputs(legacy));
   factory.mm_inputs_ready=false;
   CHECK_FALSE(vllm::ModelRegistry::SupportsMmInputs(legacy));
+}
+
+// T09: the factory the registry uses advertises the multimodal input path.
+// kGemma4Factory copies kGemma4MmHooks as its base, so the mm_inputs_ready
+// flag in kGemma4MmHooks propagates to the factory the runner sees.  Before
+// the flip this CHECK fails: mm_inputs_ready is false and SupportsMmInputs
+// returns false even though encode_mm and embed_mm are both non-null.
+TEST_CASE("E4B T09: kGemma4MmHooks advertises mm_inputs_ready to the runner") {
+  CHECK(vllm::kGemma4MmHooks.mm_inputs_ready);
+  CHECK(vllm::kGemma4MmHooks.encode_mm != nullptr);
+  CHECK(vllm::kGemma4MmHooks.embed_mm != nullptr);
+  // A model constructed with kGemma4MmHooks must pass SupportsMmInputs —
+  // the gate the runner checks before dispatching multimodal inputs.
+  vllm::Gemma4Weights w;
+  const vllm::ModelRegistration reg{"Gemma4ForConditionalGeneration",
+                                    &vllm::kGemma4MmHooks, {}};
+  vllm::Gemma4LoadedModel model(reg, std::move(w));
+  CHECK(vllm::ModelRegistry::SupportsMmInputs(model));
 }

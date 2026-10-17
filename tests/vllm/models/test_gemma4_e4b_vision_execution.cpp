@@ -100,7 +100,7 @@ TEST_CASE("E4B vision: decoded RGB reaches loaded shared registry and PLE merge"
   }
   CHECK(merged.mm.ple_token_ids.Ptr<int32_t>()[0]==2);
   CHECK(merged.mm.ple_token_ids.Ptr<int32_t>()[ids.size()-1]==1);
-  CHECK_FALSE(vllm::ModelRegistry::SupportsMmInputs(model));
+  CHECK(vllm::ModelRegistry::SupportsMmInputs(model));
   auto original=*item.data;
   for(int mode=0;mode<8;++mode) {
     if(mode==0)item.data->image_grid_thw[0]=2;
