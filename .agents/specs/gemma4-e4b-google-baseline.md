@@ -1974,3 +1974,66 @@ files are needed.
 Frame sampling/extraction from video data. Video pixel processing.
 Vision tower forward pass for video frames. Serving integration.
 Real tokenizer encoding. Span overlap/provenance.
+
+## T09: wire hooks and runner — flip mm_inputs_ready (prospective)
+
+Owning issue: ISSUE-LOCAL-T09-MM-READY
+State: prospective
+
+### Gap
+
+The Gemma4 multimodal path is fully implemented at the component
+level: `EncodeMmGemma4` (image), `EncodeMmGemma4Audio` (audio), and
+`EmbedMmGemma4` (merge) are all implemented and tested in isolation.
+The `kGemma4MmHooks` factory sets `encode_mm` and `embed_mm` to these
+functions.
+
+However, `kGemma4MmHooks.mm_inputs_ready` is `false`
+(`gemma4_audio_encoder.cpp:53`). The runner gates multimodal dispatch
+on `ModelRegistry::SupportsMmInputs()`, which requires all three:
+`mm_inputs_ready && encode_mm != nullptr && embed_mm != nullptr`.
+Since `mm_inputs_ready` is false, the runner skips all multimodal
+processing. The API path never processes audio/image/video.
+
+### Scope
+
+Flip `mm_inputs_ready` from `false` to `true` in `kGemma4MmHooks`
+(`gemma4_audio_encoder.cpp:53`) so the runner dispatches multimodal
+inputs through the implemented encode_mm → embed_mm → forward path.
+
+`kGemma4Factory` (`gemma4_registry.cpp:157-166`) copies
+`kGemma4MmHooks` as its base, so the flip propagates to the factory
+the registry uses. No other source changes are needed.
+
+Update four existing `CHECK_FALSE(SupportsMmInputs(model))`
+assertions that were sentinels for the gate being closed:
+
+- `test_gemma4_e4b_loader.cpp:1110` — audio encoder test
+- `test_gemma4_e4b_loader.cpp:1345` — audio merge test
+- `test_gemma4_e4b_loader.cpp:1402` — readiness contract test
+- `test_gemma4_e4b_vision_execution.cpp:103` — vision execution test
+
+These become `CHECK(SupportsMmInputs(model))` because the model now
+advertises MM support through the hooks.
+
+The readiness contract test block
+(`test_gemma4_e4b_loader.cpp:1404-1414`) tests the contract logic with
+a default factory and stays unchanged — it verifies that
+`SupportsMmInputs` requires all three of `mm_inputs_ready`,
+`encode_mm`, and `embed_mm`.
+
+### RED before fix
+
+A new test case in `test_gemma4_e4b_loader.cpp` constructs a model
+through `kGemma4Factory` (the factory the registry uses, not
+`kGemma4MmHooks` directly) and asserts
+`SupportsMmInputs` returns true. Before the flip, this fails because
+`kGemma4Factory` copies `mm_inputs_ready = false` from
+`kGemma4MmHooks`. After the flip, it passes.
+
+### Out of scope
+
+Serving integration (T10). Full e2e API path with real weights.
+Video frame sampling/extraction. Span overlap/provenance.
+Original weights inference and per-capability quality gates.
+Production device audio/BF16.
