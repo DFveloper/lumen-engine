@@ -1975,10 +1975,12 @@ Frame sampling/extraction from video data. Video pixel processing.
 Vision tower forward pass for video frames. Serving integration.
 Real tokenizer encoding. Span overlap/provenance.
 
-## T09: wire hooks and runner — flip mm_inputs_ready (prospective)
+## T09: wire hooks and runner — flip mm_inputs_ready (accepted)
 
 Owning issue: ISSUE-LOCAL-T09-MM-READY
-State: prospective
+State: accepted
+Commit: `3f3500877` (fix), `9d9a478dd` (spec)
+Review: `9cbd01cb` PASS — 48/7214 loader, 5/1172 vision, 28 manifest, 3/3 mutants caught
 
 ### Gap
 

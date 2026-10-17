@@ -1,7 +1,7 @@
 # T09: Wire hooks and runner — flip mm_inputs_ready
 
 Owning spec: `.agents/specs/gemma4-e4b-google-baseline.md` §T09
-State: OPEN
+State: ACCEPTED — commit `3f3500877`, review `9cbd01cb` PASS
 
 ## Gap
 
