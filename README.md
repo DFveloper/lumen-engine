@@ -39,6 +39,8 @@
 
 - **2026-10** **Kolibri-1 gains n-gram speculative decoding on CPU.** No draft model is required.
   See the [recipe and validation limits](docs/SPECULATIVE-DECODING.md#kolibri-1-on-cpu).
+- **2026-10** **Benchmarks expose EOS, chat-template, thinking, and KV-cache dtype controls.**
+  See [defaults and examples](docs/USAGE.md#benchmark-workload-controls) to set the workload explicitly.
 - **2026-09** **Qwen3.8 gains an endpoint measurement tool.** The TensorFold comparison remains
   blocked by missing artifacts, with no speed result. See the
   [measurement instructions and limits](docs/benchmarks/qwen38-tensorfold-gap.md#measurement-tools).
