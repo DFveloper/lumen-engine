@@ -2865,6 +2865,8 @@ if(VLLM_CPP_SERVER)
   # MODEL-MM-gemma4-mm-gemma4-for-conditional-generation).
   vllm_cpp_add_test(test_gemma4_e4b_mm_chat
     vllm/entrypoints/openai/test_gemma4_e4b_mm_chat.cpp)
+  target_compile_definitions(test_gemma4_e4b_mm_chat PRIVATE
+    GEMMA4_E4B_FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures")
   # Gemma4 image chat path (T10B).
   vllm_cpp_add_test(test_gemma4_e4b_mm_chat_image
     vllm/entrypoints/openai/test_gemma4_e4b_mm_chat_image.cpp)

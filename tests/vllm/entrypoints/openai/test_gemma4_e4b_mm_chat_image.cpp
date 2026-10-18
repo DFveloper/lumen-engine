@@ -28,10 +28,11 @@ using json = nlohmann::ordered_json;
 
 namespace {
 
-// Gemma4 special token IDs from tests/fixtures/gemma4_e4b_google/config.json
-constexpr int32_t kImageToken = 258880;
-constexpr int32_t kBoiToken = 255999;
-constexpr int32_t kEoiToken = 258882;
+// Gemma4 special token IDs — small test values that fit within
+// the test tokenizer's vocab range.
+constexpr int32_t kImageToken = 302;
+constexpr int32_t kBoiToken = 300;
+constexpr int32_t kEoiToken = 301;
 
 // Build a minimal tokenizer that has the Gemma4 special tokens as added
 // tokens, so EncodeWithSpecialTokens produces the correct placeholder IDs.
@@ -42,21 +43,30 @@ vllm::tok::Tokenizer BuildTokenizer() {
   json doc;
   doc["version"] = "1.0";
   doc["added_tokens"] = json::array({
-      {{"id", kBoiToken}, {"content", "<start_of_image>"}, {"special", true}},
-      {{"id", kEoiToken}, {"content", "<end_of_image>"}, {"special", true}},
-      {{"id", kImageToken}, {"content", "<IMG_TOKEN>"}, {"special", true}},
+      {{"id", 300}, {"content", "<start_of_image>"}, {"special", true}},
+      {{"id", 301}, {"content", "<end_of_image>"}, {"special", true}},
+      {{"id", 302}, {"content", "<IMG_TOKEN>"}, {"special", true}},
+      {{"id", 303}, {"content", "<bos>"}, {"special", true}},
+      {{"id", 304}, {"content", "<eos>"}, {"special", true}},
   });
   doc["normalizer"] = nullptr;
-  doc["pre_tokenizer"] = {{"type", "ByteLevel"}, {"add_prefix_space", false},
-                          {"trim_offsets", false}, {"use_regex", false}};
-  // Minimal byte-level vocab so any text encodes.
-  json vocab = json::object();
-  int id = 30;
+  doc["pre_tokenizer"] = {{"type", "Metaspace"}, {"replacement", "_"},
+                          {"prepend_scheme", "always"}, {"split", true}};
+  json vocab_arr = json::array();
+  vocab_arr.push_back({"_", -3.0});  // Metaspace replacement char
+  vocab_arr.push_back({"user", -1.0});
+  vocab_arr.push_back({"assistant", -1.0});
+  vocab_arr.push_back({"what", -1.0});
+  vocab_arr.push_back({"is", -1.0});
+  vocab_arr.push_back({"this", -1.0});
+  vocab_arr.push_back({"?", -1.0});
   for (int b = 0; b < 256; ++b) {
-    vocab[vllm::tok::MapBytesToUnicode(std::string(1, static_cast<char>(b)))] = id++;
+    char buf[8];
+    std::snprintf(buf, sizeof(buf), "<0x%02X>", b);
+    vocab_arr.push_back({std::string(buf), 0.0});
   }
-  doc["model"] = {{"type", "BPE"}, {"ignore_merges", false},
-                  {"vocab", vocab}, {"merges", json::array()}};
+  doc["model"] = {{"type", "Unigram"}, {"byte_fallback", true},
+                  {"vocab", vocab_arr}, {"merges", json::array()}};
   std::ofstream(path, std::ios::binary) << doc.dump();
   auto tok = vllm::tok::Tokenizer::FromHfJson(path);
   std::remove(path.c_str());
@@ -120,8 +130,18 @@ struct Ctx {
       std::make_shared<std::vector<std::string>>();
 
   Ctx() {
-    config = vllm::LoadHfConfig(
+    // Load the real Gemma4 config fixture, then override the special
+    // token IDs with small test values that the test tokenizer supports.
+    auto real = vllm::LoadHfConfig(
         std::string(GEMMA4_E4B_FIXTURE_DIR) + "/gemma4_e4b_google/config.json");
+    // Override token IDs — the Gemma4SpecialTokenIds constructor reads
+    // from config.raw. Real IDs are in the 256K range; use small IDs
+    // that the test tokenizer can handle.
+    real.raw["image_token_id"] = 302;
+    real.raw["boi_token_id"] = 300;
+    real.raw["eoi_token_id"] = 301;
+    config = real;
+
     ctx.architecture = "Gemma4ForConditionalGeneration";
     ctx.model_dir = std::string(GEMMA4_E4B_FIXTURE_DIR) + "/gemma4_e4b_google";
     ctx.config_path = ctx.model_dir + "/config.json";
@@ -134,9 +154,9 @@ struct Ctx {
       std::string out;
       for (const auto& m : msgs) {
         rec->push_back(m.content.value_or(""));
-        out += "<bos>" + m.role + "\n" + m.content.value_or("") + "<eos>";
+        out += "<bos>" + m.role + " " + m.content.value_or("") + "<eos>";
       }
-      if (true) out += "<bos>assistant\n";
+      out += "<bos>assistant";
       return out;
     };
     ctx.codec = oai::DefaultImageCodec();

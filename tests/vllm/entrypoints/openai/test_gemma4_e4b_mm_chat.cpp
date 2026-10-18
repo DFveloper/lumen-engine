@@ -12,9 +12,12 @@
 #include <string>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include "vllm/entrypoints/openai/mm_chat_registry.h"
 #include "vllm/entrypoints/openai/protocol.h"
 #include "vllm/multimodal/inputs.h"
+#include "vllm/transformers_utils/hf_config.h"
 
 namespace oai = vllm::entrypoints::openai;
 
@@ -68,19 +71,29 @@ TEST_CASE("gemma4 mm chat: factory throws on incomplete context") {
 TEST_CASE("gemma4 mm chat: factory returns seam with non-null chat_fn") {
   oai::MultiModalChatContext ctx;
   ctx.architecture = "Gemma4ForConditionalGeneration";
-  // Non-null sentinels — the factory checks for null but does not
-  // dereference (the refusing seam does not use them).
+  // Load the real config fixture — the factory reads special token IDs
+  // from config via Gemma4SpecialTokenIds.
+  static const auto cfg = vllm::LoadHfConfig(
+      std::string(GEMMA4_E4B_FIXTURE_DIR) + "/gemma4_e4b_google/config.json");
   int tok_sentinel = 0;
-  vllm::HfConfig cfg_sentinel;
   ctx.tokenizer = reinterpret_cast<const vllm::tok::Tokenizer*>(&tok_sentinel);
-  ctx.config = &cfg_sentinel;
+  ctx.config = &cfg;
+  ctx.prompt_fn = [](const std::vector<oai::ChatMessage>&, bool,
+                      const std::vector<oai::ChatCompletionToolsParam>&,
+                      const nlohmann::ordered_json&) -> std::string {
+    return "";
+  };
+  ctx.codec = oai::DefaultImageCodec();
 
   auto seam = oai::MultiModalChatRegistry::MakeSeam(ctx);
   REQUIRE(seam.chat_fn != nullptr);
 
-  // The seam must still refuse multimodal requests.
+  // The seam must still refuse audio/video requests.
+  oai::ChatContentPart audio_part;
+  audio_part.type = "input_audio";
+  audio_part.url = "data:audio/wav;base64,UklGRiQ=";
   REQUIRE_THROWS_AS(
-      seam.chat_fn({UserWith({ImagePart(), TextPart("what is this?")})}),
+      seam.chat_fn({UserWith({audio_part, TextPart("transcribe")})}),
       vllm::v1::InputValidationError);
 }
 
