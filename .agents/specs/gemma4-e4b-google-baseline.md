@@ -2040,10 +2040,12 @@ Video frame sampling/extraction. Span overlap/provenance.
 Original weights inference and per-capability quality gates.
 Production device audio/BF16.
 
-## T10A: register Gemma4 mm chat seam (prospective)
+## T10A: register Gemma4 mm chat seam (accepted)
 
 Owning issue: ISSUE-LOCAL-T10A-MM-CHAT-SEAM
-State: prospective
+State: accepted
+Commit: `b2f449ba3` (fix), `58f9c1a5d` (spec)
+Review: `3c85635e` PASS — 4/8, 2/3 mutants caught, mutation 3 coverage gap fixed with additional test
 
 ### Gap
 

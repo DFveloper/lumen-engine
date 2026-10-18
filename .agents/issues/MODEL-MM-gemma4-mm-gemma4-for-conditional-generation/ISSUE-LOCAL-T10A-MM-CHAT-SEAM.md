@@ -1,7 +1,7 @@
 # T10A: Register Gemma4 mm chat seam (refusing stub)
 
 Owning spec: `.agents/specs/gemma4-e4b-google-baseline.md` §T10A
-State: OPEN
+State: ACCEPTED — commit `b2f449ba3`, review `3c85635e` PASS
 
 ## Gap
 
