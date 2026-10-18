@@ -2865,6 +2865,11 @@ if(VLLM_CPP_SERVER)
   # MODEL-MM-gemma4-mm-gemma4-for-conditional-generation).
   vllm_cpp_add_test(test_gemma4_e4b_mm_chat
     vllm/entrypoints/openai/test_gemma4_e4b_mm_chat.cpp)
+  # Gemma4 image chat path (T10B).
+  vllm_cpp_add_test(test_gemma4_e4b_mm_chat_image
+    vllm/entrypoints/openai/test_gemma4_e4b_mm_chat_image.cpp)
+  target_compile_definitions(test_gemma4_e4b_mm_chat_image PRIVATE
+    GEMMA4_E4B_FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures")
   # The language and projector GGUF fixtures live beside the model gates, and
   # they are shared with the W3B/W4 suites so the artifact is described once.
   target_include_directories(test_deepseek_v4_mm_chat PRIVATE
