@@ -2861,6 +2861,10 @@ if(VLLM_CPP_SERVER)
     NANO_NEMOTRON_VL_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/vllm/models/fixtures")
   vllm_cpp_add_test(test_deepseek_v4_mm_chat
     vllm/entrypoints/openai/test_deepseek_v4_mm_chat.cpp)
+  # Gemma4 mm chat seam (row
+  # MODEL-MM-gemma4-mm-gemma4-for-conditional-generation).
+  vllm_cpp_add_test(test_gemma4_e4b_mm_chat
+    vllm/entrypoints/openai/test_gemma4_e4b_mm_chat.cpp)
   # The language and projector GGUF fixtures live beside the model gates, and
   # they are shared with the W3B/W4 suites so the artifact is described once.
   target_include_directories(test_deepseek_v4_mm_chat PRIVATE
