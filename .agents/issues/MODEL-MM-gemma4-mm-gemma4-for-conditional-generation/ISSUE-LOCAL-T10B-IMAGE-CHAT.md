@@ -1,7 +1,7 @@
 # T10B: Image processing in the Gemma4 chat seam
 
 Owning spec: `.agents/specs/gemma4-e4b-google-baseline.md` §T10B
-State: OPEN
+State: ACCEPTED — commit `833ac90af`, review `636be6e2` PASS
 
 ## Gap
 

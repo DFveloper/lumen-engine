@@ -2082,10 +2082,12 @@ returns null.
 Image/audio/video processing in the chat path. Full serving
 integration. Real model weights. Placeholder expansion.
 
-## T10B: image processing in the Gemma4 chat seam (prospective)
+## T10B: image processing in the Gemma4 chat seam (accepted)
 
 Owning issue: ISSUE-LOCAL-T10B-IMAGE-CHAT
-State: prospective
+State: accepted
+Commit: `833ac90af` (fix), `bff0d136e` (RED), `198232156` (spec)
+Review: `636be6e2` PASS — mm_chat 4/8, mm_chat_image 2/264, 3/3 mutants caught
 
 ### Gap
 
