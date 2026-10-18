@@ -6,9 +6,7 @@
 // a clear message naming the architecture. Text-only requests pass
 // through unchanged.
 
-#include <catch2/catch_test_macros.hpp>
-#include <catch2/matchers/catch_matchers.hpp>
-#include <catch2/matchers/catch_matchers_string.hpp>
+#include <doctest/doctest.h>
 
 #include <optional>
 #include <string>
@@ -18,62 +16,92 @@
 #include "vllm/entrypoints/openai/protocol.h"
 #include "vllm/multimodal/inputs.h"
 
+namespace oai = vllm::entrypoints::openai;
+
 namespace {
 
-using namespace vllm::entrypoints::openai;
-
-ChatCompletionRequest UserWith(std::vector<ChatCompletionContentPart> parts) {
-  ChatCompletionRequest r;
-  ChatCompletionMessage msg;
-  msg.role = "user";
-  msg.content = std::move(parts);
-  r.messages.push_back(std::move(msg));
-  return r;
-}
-
-ChatCompletionContentPart TextPart(std::string text) {
-  ChatCompletionContentPart p;
+oai::ChatContentPart TextPart(const std::string& text) {
+  oai::ChatContentPart p;
   p.type = "text";
-  p.text = std::move(text);
+  p.text = text;
   return p;
 }
 
-ChatCompletionContentPart ImagePart(int w, int h) {
-  ChatCompletionContentPart p;
+oai::ChatContentPart ImagePart() {
+  oai::ChatContentPart p;
   p.type = "image_url";
-  ChatCompletionImageURL u;
-  // Minimal data URL — the seam refuses before decoding.
-  u.url = "data:image/png;base64,iVBOR";
-  p.image_url = std::move(u);
+  p.url = "data:image/png;base64,iVBOR";
   return p;
+}
+
+oai::ChatMessage UserWith(std::vector<oai::ChatContentPart> parts) {
+  oai::ChatMessage m;
+  m.role = "user";
+  m.content_parts = std::move(parts);
+  return m;
 }
 
 }  // namespace
 
-// T10A RED: the seam is registered for the architecture.
+// T10A: the seam is registered for the architecture.
 TEST_CASE("gemma4 mm chat: seam is registered for Gemma4ForConditionalGeneration") {
-  const MultiModalChatRegistration* reg =
-      MultiModalChatRegistry::Find("Gemma4ForConditionalGeneration");
+  const oai::MultiModalChatRegistration* reg =
+      oai::MultiModalChatRegistry::Find("Gemma4ForConditionalGeneration");
   REQUIRE(reg != nullptr);
   CHECK(reg->make_seam != nullptr);
 }
 
-// T10A: the seam refuses multimodal requests with a clear message.
-TEST_CASE("gemma4 mm chat: multimodal request is refused with architecture name") {
-  // Build a minimal context.
-  MultiModalChatContext ctx;
+// T10A: the factory refuses when the context is incomplete (no tokenizer/config).
+TEST_CASE("gemma4 mm chat: factory throws on incomplete context") {
+  oai::MultiModalChatContext ctx;
   ctx.architecture = "Gemma4ForConditionalGeneration";
+  // tokenizer and config are null — the factory validates and throws.
+  REQUIRE_THROWS_AS(oai::MultiModalChatRegistry::MakeSeam(ctx),
+                     std::runtime_error);
+}
 
-  const MultiModalChatSeam seam = MultiModalChatRegistry::MakeSeam(ctx);
-  REQUIRE(seam.chat_fn);
+// T10A: the factory returns a seam with a non-null chat_fn when the context
+// is valid (tokenizer and config present). Closes the mutation-3 coverage
+// gap: without this test, setting seam.chat_fn = nullptr in the factory is
+// not caught — the "refusing fn" test builds chat_fn directly via
+// MakeRefusingMultiModalChatFn and never goes through the factory.
+TEST_CASE("gemma4 mm chat: factory returns seam with non-null chat_fn") {
+  oai::MultiModalChatContext ctx;
+  ctx.architecture = "Gemma4ForConditionalGeneration";
+  // Non-null sentinels — the factory checks for null but does not
+  // dereference (the refusing seam does not use them).
+  int tok_sentinel = 0;
+  vllm::HfConfig cfg_sentinel;
+  ctx.tokenizer = reinterpret_cast<const vllm::tok::Tokenizer*>(&tok_sentinel);
+  ctx.config = &cfg_sentinel;
 
-  // A text-only request must pass through unchanged.
-  auto text_out = seam.chat_fn({UserWith({TextPart("hello")})});
+  auto seam = oai::MultiModalChatRegistry::MakeSeam(ctx);
+  REQUIRE(seam.chat_fn != nullptr);
+
+  // The seam must still refuse multimodal requests.
+  REQUIRE_THROWS_AS(
+      seam.chat_fn({UserWith({ImagePart(), TextPart("what is this?")})}),
+      vllm::v1::InputValidationError);
+}
+
+// T10A: the refusing chat fn passes text through and refuses multimodal.
+TEST_CASE("gemma4 mm chat: refusing fn text pass-through and mm refusal") {
+  auto chat_fn = oai::MakeRefusingMultiModalChatFn(
+      "Gemma4ForConditionalGeneration",
+      "image, audio, and video processing in the chat path is not yet "
+      "implemented");
+
+  // Text-only: returns nullopt (pass-through).
+  auto text_out = chat_fn({UserWith({TextPart("hello")})});
   CHECK_FALSE(text_out.has_value());
 
-  // A request with an image must be refused.
-  auto mm_out = seam.chat_fn({UserWith({ImagePart(48, 48), TextPart("what is this?")})});
-  REQUIRE_FALSE(mm_out.has_value());
-  CHECK_THAT(mm_out.error(),
-             Catch::Matchers::Contains("Gemma4", Catch::CaseSensitive::No));
+  // Multimodal: throws InputValidationError with architecture name.
+  REQUIRE_THROWS_AS(
+      chat_fn({UserWith({ImagePart(), TextPart("what is this?")})}),
+      vllm::v1::InputValidationError);
+  try {
+    chat_fn({UserWith({ImagePart(), TextPart("what is this?")})});
+  } catch (const vllm::v1::InputValidationError& e) {
+    CHECK(std::string(e.what()).find("Gemma4") != std::string::npos);
+  }
 }

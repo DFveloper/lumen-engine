@@ -1365,6 +1365,7 @@ add_library(vllm STATIC
   src/vllm/entrypoints/openai/mm_chat_nano_nemotron_vl.cpp
   src/vllm/entrypoints/openai/mm_chat_dots3note.cpp
   src/vllm/entrypoints/openai/mm_chat_qwen3vl.cpp
+  src/vllm/entrypoints/openai/mm_chat_gemma4.cpp
   src/vllm/entrypoints/openai/serving_utils.cpp
   src/vllm/entrypoints/openai/serving_completion.cpp
   src/vllm/entrypoints/openai/serving_chat.cpp
