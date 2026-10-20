@@ -4875,10 +4875,19 @@ add_executable(test_gemma4_e4b_template
   ../src/vllm/entrypoints/chat_template.cpp
   ../src/vllm/entrypoints/openai/protocol.cpp
   ../src/vllm/model_executor/model_loader/gguf_reader.cpp
-  ../src/vllm/model_executor/model_loader/read_only_file_mapping.cpp
-  ../src/vllm/v1/core/kv_cache_utils.cpp)
+  ../src/vllm/model_executor/model_loader/read_only_file_mapping.cpp)
 target_include_directories(test_gemma4_e4b_template PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_gemma4_e4b_template PRIVATE vllm_test_main)
+if(TARGET vllm::sanitize_test_shared)
+  # Under sanitizers, link the shared library for kv_cache typeinfo/vtable
+  # symbols instead of compiling kv_cache_utils.cpp directly.  The direct
+  # compilation triggers UBSan typeinfo references for the polymorphic KV
+  # cache spec hierarchy that the linker cannot resolve without the key
+  # functions (virtual destructors are =default in the header).
+  target_link_libraries(test_gemma4_e4b_template PRIVATE vllm::sanitize_test_shared vllm_test_main)
+else()
+  target_link_libraries(test_gemma4_e4b_template PRIVATE vllm_test_main)
+  target_sources(test_gemma4_e4b_template PRIVATE ../src/vllm/v1/core/kv_cache_utils.cpp)
+endif()
 if(MSVC)
   target_compile_options(test_gemma4_e4b_template PRIVATE /Gy /Gw)
   target_link_options(test_gemma4_e4b_template PRIVATE /OPT:REF)

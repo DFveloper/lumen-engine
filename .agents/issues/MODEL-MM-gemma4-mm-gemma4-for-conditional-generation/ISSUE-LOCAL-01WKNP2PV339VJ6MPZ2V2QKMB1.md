@@ -1,7 +1,14 @@
-# T09: Wire hooks and runner — flip mm_inputs_ready
-
-Owning spec: `.agents/specs/gemma4-e4b-google-baseline.md` §T09
-State: ACCEPTED — commit `3f3500877`, review `9cbd01cb` PASS
+ID: ISSUE-LOCAL-01WKNP2PV339VJ6MPZ2V2QKMB1
+Title: T09: Wire hooks and runner — flip mm_inputs_ready
+Row: MODEL-MM-gemma4-mm-gemma4-for-conditional-generation
+State: CLOSED
+Kind: feature
+GitHub: -
+Mirror: PENDING
+Availability: FULL
+Created: 2026-10-10
+Updated: 2026-10-20
+Closed: 2026-10-20
 
 ## Problem
 

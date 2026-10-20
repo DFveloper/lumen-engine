@@ -198,18 +198,18 @@ std::vector<float> Gemma4VisionForward(const std::vector<float>& pixel_values,
              "gemma4 vision: weight size overflow");
     return static_cast<size_t>(rows * cols);
   };
-  const auto h = cfg.hidden_size, i = cfg.intermediate_size;
-  VT_CHECK(w.input_proj.size() == size(h, cfg.patch_dim()) &&
-               w.position_embedding_table.size() == size(cfg.position_embedding_size, h) * 2 &&
-               w.embed_projection.size() == size(cfg.text_hidden_size, h) &&
+  const auto hid = cfg.hidden_size, imid = cfg.intermediate_size;
+  VT_CHECK(w.input_proj.size() == size(hid, cfg.patch_dim()) &&
+               w.position_embedding_table.size() == size(cfg.position_embedding_size, hid) * 2 &&
+               w.embed_projection.size() == size(cfg.text_hidden_size, hid) &&
                w.blocks.size() == static_cast<size_t>(cfg.depth), "gemma4 vision: weight shape");
   for (const auto& block : w.blocks) {
     for (const auto* v : {&block.q_proj, &block.k_proj, &block.v_proj, &block.o_proj})
-      VT_CHECK(v->size() == size(h, h), "gemma4 vision: attention weight shape");
+      VT_CHECK(v->size() == size(hid, hid), "gemma4 vision: attention weight shape");
     for (const auto* v : {&block.gate_proj, &block.up_proj, &block.down_proj})
-      VT_CHECK(v->size() == size(h, i), "gemma4 vision: MLP weight shape");
+      VT_CHECK(v->size() == size(hid, imid), "gemma4 vision: MLP weight shape");
     for (const auto* v : {&block.input_ln, &block.post_attn_ln, &block.pre_ff_ln, &block.post_ff_ln})
-      VT_CHECK(v->size() == static_cast<size_t>(h), "gemma4 vision: norm weight shape");
+      VT_CHECK(v->size() == static_cast<size_t>(hid), "gemma4 vision: norm weight shape");
     VT_CHECK(block.q_norm.size() == static_cast<size_t>(cfg.head_dim) &&
                  block.k_norm.size() == static_cast<size_t>(cfg.head_dim), "gemma4 vision: head norm shape");
   }

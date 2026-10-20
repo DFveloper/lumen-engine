@@ -1,7 +1,14 @@
-# T10A: Register Gemma4 mm chat seam (refusing stub)
-
-Owning spec: `.agents/specs/gemma4-e4b-google-baseline.md` §T10A
-State: ACCEPTED — commit `b2f449ba3`, review `3c85635e` PASS
+ID: ISSUE-LOCAL-01GQ7HA9V4NTMVBB639P3ECRMP
+Title: T10A: Register Gemma4 mm chat seam (refusing stub)
+Row: MODEL-MM-gemma4-mm-gemma4-for-conditional-generation
+State: CLOSED
+Kind: feature
+GitHub: -
+Mirror: PENDING
+Availability: FULL
+Created: 2026-10-10
+Updated: 2026-10-20
+Closed: 2026-10-20
 
 ## Problem
 

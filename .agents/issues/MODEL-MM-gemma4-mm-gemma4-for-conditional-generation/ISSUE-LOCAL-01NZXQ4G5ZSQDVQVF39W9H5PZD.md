@@ -1,7 +1,14 @@
-# T10B: Image processing in the Gemma4 chat seam
-
-Owning spec: `.agents/specs/gemma4-e4b-google-baseline.md` §T10B
-State: ACCEPTED — commit `833ac90af`, review `636be6e2` PASS
+ID: ISSUE-LOCAL-01NZXQ4G5ZSQDVQVF39W9H5PZD
+Title: T10B: Image processing in the Gemma4 chat seam
+Row: MODEL-MM-gemma4-mm-gemma4-for-conditional-generation
+State: CLOSED
+Kind: feature
+GitHub: -
+Mirror: PENDING
+Availability: FULL
+Created: 2026-10-10
+Updated: 2026-10-20
+Closed: 2026-10-20
 
 ## Problem
 
