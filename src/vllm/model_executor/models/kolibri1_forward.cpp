@@ -208,7 +208,7 @@ DBuf DequantFp8Block(Dev d, const Fp8BlockWeight& w) {
   VT_CHECK(static_cast<int64_t>(w.packed.bytes.size()) == w.n * w.k,
            "kolibri1 forward: fp8 packed bytes are not [n, k]");
   DBuf out(d, DType::kBF16, {w.n, w.k});
-  prof::Scope prof("dequant_fp8_block");
+  prof::Scope prof_scope("dequant_fp8_block");
   const auto* src = w.packed.bytes.data();
   const auto* sc = reinterpret_cast<const float*>(w.scale.bytes.data());
   auto* dst = reinterpret_cast<uint16_t*>(out.ptr());
@@ -237,7 +237,7 @@ DBuf DequantFp8Block(Dev d, const Fp8BlockWeight& w) {
 DBuf LinearBTRaw(Dev d, const Tensor& x, const OwnedTensor& wt_raw, int64_t t,
                  DType out_dtype = DType::kBF16,
                  const char* gsite = "other_bf16") {
-  prof::Scope prof("linear_gemm");
+  prof::Scope prof_scope("linear_gemm");
   Tensor wt = ResidentWeight(d, wt_raw);
   DBuf out(d, out_dtype, {t, wt.shape[0]});
   gemvprof::Call gc(gsite, static_cast<uint64_t>(t) * wt.shape[0] * wt.shape[1]);
@@ -262,7 +262,7 @@ ResolvedBT ResolveBT(Dev d, const Kolibri1Projection& w) {
     return r;
   }
   if (kolibri1_dequant_cache::ProcessCache().enabled()) {
-    prof::Scope prof("dequant_fp8_block");  // cache lookups + cold decodes
+    prof::Scope prof_scope("dequant_fp8_block");  // cache lookups + cold decodes
     r.dequant_lease =
         kolibri1_dequant_cache::ProcessCache().GetOrDequant(w.fp8_block);
     r.wt = dense_attn::MakeTensor(const_cast<uint16_t*>(r.dequant_lease.data()),
@@ -290,7 +290,7 @@ DBuf LinearBT(Dev d, const Tensor& x, const Kolibri1Projection& w,              
   // corruption). Budget 0 (the default) DISABLES the cache and keeps the
   // original threaded pool decode, so main-line behavior is byte-for-byte
   // unchanged unless the env var is set.
-  prof::Scope prof("linear_gemm");
+  prof::Scope prof_scope("linear_gemm");
   ResolvedBT r = ResolveBT(d, w);
   DBuf out(d, out_dtype, {t, w.fp8_block.n});
   gemvprof::Call gc(gsite, static_cast<uint64_t>(t) * w.fp8_block.n *
@@ -411,7 +411,7 @@ DBuf AttentionBlock(Dev d, const Kolibri1AttnWeights& w, const Kolibri1Params& p
     Tensor kh = Reshape(k.t(), {t * hkv, dh});
     Tensor qw = ResidentWeight(d, w.q_norm);
     Tensor kw = ResidentWeight(d, w.k_norm);
-    prof::Scope prof("norms");
+    prof::Scope prof_scope("norms");
     vt::RmsNorm(d.q, qn.t(), qh, qw, vt::RmsNormArgs{static_cast<float>(p.rms_norm_eps), false});
     vt::RmsNorm(d.q, kn.t(), kh, kw, vt::RmsNormArgs{static_cast<float>(p.rms_norm_eps), false});
     q3 = Reshape(qn.t(), {t, hq, dh});
@@ -425,7 +425,7 @@ DBuf AttentionBlock(Dev d, const Kolibri1AttnWeights& w, const Kolibri1Params& p
     ra.base = static_cast<float>(p.rope_theta);
     ra.rotary_dim = static_cast<int>(dh);
     ra.is_neox_style = true;
-    prof::Scope prof("attn_rope");
+    prof::Scope prof_scope("attn_rope");
     vt::RopeNeox(d.q, q3, k3, positions, ra);
   }
 
@@ -436,7 +436,7 @@ DBuf AttentionBlock(Dev d, const Kolibri1AttnWeights& w, const Kolibri1Params& p
   Tensor v_cache = dense_attn::KvSlice(kv, d.q.device, 1);
   DBuf attn(d, DType::kBF16, {t, hq, dh});
   {
-    prof::Scope prof("attn_core");
+    prof::Scope prof_scope("attn_core");
     vt::PagedAttentionArgs pa{};
     pa.scale = scale;
     pa.causal = true;
@@ -493,12 +493,12 @@ DBuf MoeBlock(Dev d, const Kolibri1MoeWeights& w, const Kolibri1Params& p,
   DBuf dlog = LinearBTRaw(d, dhn, w.router_gate, t, DType::kF32, "router");
   std::vector<float> logits(static_cast<size_t>(t * e));
   {
-    prof::Scope prof("moe_d2h");
+    prof::Scope prof_scope("moe_d2h");
     dlog.Download(d, logits.data());
   }
   std::vector<float> bias(static_cast<size_t>(e));
   {
-    prof::Scope prof("moe_d2h");
+    prof::Scope prof_scope("moe_d2h");
     Tensor bt = ResidentWeight(d, w.e_score_correction_bias, {e});
     vt::Backend& be = vt::GetBackend(d.q.device.type);
     be.Copy(d.q, bias.data(), bt.data, static_cast<size_t>(e) * sizeof(float));
@@ -563,7 +563,7 @@ DBuf MoeBlock(Dev d, const Kolibri1MoeWeights& w, const Kolibri1Params& p,
   }
   Kolibri1HostRouting route;
   {
-    prof::Scope prof("moe_topk");
+    prof::Scope prof_scope("moe_topk");
     route = SigmoidLogitAddRouting(logits, bias, t, e, top_k);
   }
   RouteDump(layer, logits, route, t, e, top_k);
@@ -945,11 +945,11 @@ ForwardLogits ForwardKolibri1Forward(
     Tensor dhn_t = dhn.t();
     Tensor res_t = res.t();
     if (dense_attn::FusedChainAdoptEnabled()) {
-      prof::Scope prof("norms");
+      prof::Scope prof_scope("norms");
       vt::FusedChain(d.q, dhn_t, hidden, w_in, &res_t,
                      vt::kFusedAddRmsNormStd, eps);
     } else {
-      prof::Scope prof("norms");
+      prof::Scope prof_scope("norms");
       vt::RmsNorm(d.q, dhn_t, hidden, w_in,
                   vt::RmsNormArgs{eps, false}, &res_t);
     }
@@ -969,7 +969,7 @@ ForwardLogits ForwardKolibri1Forward(
     DBuf attn_n(d, DType::kBF16, {t, h});
     Tensor w_pa = ResidentWeight(d, lw.post_attn_norm, {h});
     {
-      prof::Scope prof("norms");
+      prof::Scope prof_scope("norms");
       vt::RmsNorm(d.q, attn_n.t(), attn.t(), w_pa, vt::RmsNormArgs{eps, false});
     }
     StageDump("attn_n", l, attn_n, d);
@@ -981,11 +981,11 @@ ForwardLogits ForwardKolibri1Forward(
     Tensor dh2_t = dh2.t();
     res_t = res.t();
     if (dense_attn::FusedChainAdoptEnabled()) {
-      prof::Scope prof("norms");
+      prof::Scope prof_scope("norms");
       vt::FusedChain(d.q, dh2_t, attn_n.t(), w_pal, &res_t,
                      vt::kFusedAddRmsNormStd, eps);
     } else {
-      prof::Scope prof("norms");
+      prof::Scope prof_scope("norms");
       vt::RmsNorm(d.q, dh2_t, attn_n.t(), w_pal, vt::RmsNormArgs{eps, false},
                   &res_t);
     }
@@ -997,7 +997,7 @@ ForwardLogits ForwardKolibri1Forward(
     DBuf moe_n(d, DType::kBF16, {t, h});
     Tensor w_pf = ResidentWeight(d, lw.post_ffn_norm, {h});
     {
-      prof::Scope prof("norms");
+      prof::Scope prof_scope("norms");
       vt::RmsNorm(d.q, moe_n.t(), moe.t(), w_pf, vt::RmsNormArgs{eps, false});
     }
     StageDump("moe_n", l, moe_n, d);
@@ -1015,11 +1015,11 @@ ForwardLogits ForwardKolibri1Forward(
   Tensor dnorm_t = dnorm.t();
   Tensor res_t = res.t();
   if (dense_attn::FusedChainAdoptEnabled()) {
-    prof::Scope prof("norms");
+    prof::Scope prof_scope("norms");
     vt::FusedChain(d.q, dnorm_t, hidden, w_fn, &res_t,
                    vt::kFusedAddRmsNormStd, eps);
   } else {
-    prof::Scope prof("norms");
+    prof::Scope prof_scope("norms");
     vt::RmsNorm(d.q, dnorm_t, hidden, w_fn, vt::RmsNormArgs{eps, false},
                 &res_t);
   }
@@ -1044,7 +1044,7 @@ ForwardLogits ForwardKolibri1Forward(
   Tensor lm = ResidentWeight(d, weights.lm_head, {vocab, h});
   DBuf logits(d, DType::kF32, {n_out, vocab});
   {
-    prof::Scope prof("lm_head");
+    prof::Scope prof_scope("lm_head");
     gemvprof::Call gc("lm_head", static_cast<uint64_t>(n_out) * vocab * h);
     vt::MatmulBT(d.q, logits.t(), src, lm);
   }
