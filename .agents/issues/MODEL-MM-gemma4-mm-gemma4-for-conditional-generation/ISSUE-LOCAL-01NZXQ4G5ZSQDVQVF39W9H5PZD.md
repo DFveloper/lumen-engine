@@ -3,12 +3,15 @@
 Owning spec: `.agents/specs/gemma4-e4b-google-baseline.md` §T10B
 State: ACCEPTED — commit `833ac90af`, review `636be6e2` PASS
 
-## Gap
+## Problem
 
 T10A registered the mm chat seam but the `chat_fn` refuses all
 multimodal requests. Image processing through the serving path is
 not implemented.
 
+## Resolution
+
+Accepted — see spec section for evidence.
 ## Scope
 
 Upgrade `MakeGemma4ChatSeam` in `mm_chat_gemma4.cpp` to process

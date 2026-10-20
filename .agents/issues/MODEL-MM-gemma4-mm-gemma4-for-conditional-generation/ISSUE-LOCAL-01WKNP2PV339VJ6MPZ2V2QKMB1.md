@@ -3,7 +3,7 @@
 Owning spec: `.agents/specs/gemma4-e4b-google-baseline.md` §T09
 State: ACCEPTED — commit `3f3500877`, review `9cbd01cb` PASS
 
-## Gap
+## Problem
 
 The Gemma4 multimodal path is fully implemented at the component level:
 `EncodeMmGemma4` (image), `EncodeMmGemma4Audio` (audio), and
@@ -18,6 +18,9 @@ However, `kGemma4MmHooks.mm_inputs_ready` is `false`
 Since `mm_inputs_ready` is false, the runner skips all multimodal
 processing. The API path never processes audio/image/video.
 
+## Resolution
+
+Accepted — see spec section for evidence.
 ## Scope
 
 Flip `mm_inputs_ready` from `false` to `true` in `kGemma4MmHooks`

@@ -3,7 +3,7 @@
 Owning spec: `.agents/specs/gemma4-e4b-google-baseline.md` §T10A
 State: ACCEPTED — commit `b2f449ba3`, review `3c85635e` PASS
 
-## Gap
+## Problem
 
 T09 flipped `mm_inputs_ready` to `true`, so the server now treats
 Gemma4 as a multimodal model and calls
@@ -17,6 +17,9 @@ install context (tokenizer, config, prompt renderer, image codec)
 and returns a seam that refuses multimodal requests with a clear
 message naming the architecture and the pending modalities.
 
+## Resolution
+
+Accepted — see spec section for evidence.
 ## Scope
 
 Create `src/vllm/entrypoints/openai/mm_chat_gemma4.cpp` with:
