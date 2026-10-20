@@ -4976,6 +4976,14 @@ else()
     target_link_options(test_gemma4_e4b_reasoning_end PRIVATE -Wl,--gc-sections)
   endif()
 endif()
+if(TARGET vllm::sanitize_test_shared)
+  # Under sanitizers, link the shared library to provide typeinfo/vtable
+  # symbols for polymorphic parser hierarchies (tool parsers, reasoning
+  # parsers) whose key functions live in TUs not compiled into this target.
+  # UBSan data references the typeinfo; without the shared library the linker
+  # reports undefined reference to typeinfo for every parser subclass.
+  target_link_libraries(test_gemma4_e4b_reasoning_end PRIVATE vllm::sanitize_test_shared)
+endif()
 vllm_cpp_set_warnings(test_gemma4_e4b_reasoning_end)
 add_test(NAME test_gemma4_e4b_reasoning_end COMMAND test_gemma4_e4b_reasoning_end)
 set_tests_properties(test_gemma4_e4b_reasoning_end PROPERTIES
