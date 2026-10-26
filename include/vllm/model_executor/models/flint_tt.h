@@ -24,7 +24,7 @@
 
 namespace vt {
 class Backend;
-class Queue;
+struct Queue;
 }
 
 namespace vllm {
