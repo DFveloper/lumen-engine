@@ -6,7 +6,7 @@ Issue: `ISSUE-GH-146`.
 
 ## Now
 
-SPIKE. User approved implementation on 29 October 2026. Base: `db1d71c9b7352a07983b408b2e755e853b4534f0`.
+ACTIVE. User approved implementation on 29 October 2026. Base: `db1d71c9b7352a07983b408b2e755e853b4534f0`.
 
 ## Scope
 
@@ -14,13 +14,13 @@ Implement production CUDA execution for Pascal 6.0, Pascal 6.1, and Volta 7.0. P
 
 ## Upstream chain
 
-Use `.agents/upstream-sync.md` for the primary pin and `.agents/oracles/llama-cpp.md` for the registered secondary pin. vLLM has no Pascal or Volta execution at its architecture floor. Read the matching pinned llama.cpp CUDA source, including capability dispatch, BF16 conversions, float GEMM, quantized GEMV, and attention. Re-anchor the superseded `237ad9b96` citations in `cuda-arch-breadth-fp16.md` before relying on them. The executing chain must cite actual source paths and lines.
+Use `.agents/upstream-sync.md` for the primary pin and `.agents/oracles/llama-cpp.md` for the registered secondary pin. Pinned vLLM excludes Pascal from its CUDA target list. Volta is toolkit-dependent: `CMakeLists.txt:115-132` includes 7.0 with CUDA 12.4 and excludes it with CUDA 12.8 or newer. `vllm/platforms/cuda.py:256-263` selects FP16 for compute 6.x and 7.x. Volta primary-oracle runtime eligibility remains PENDING until hardware arrives. Read the matching pinned llama.cpp CUDA source, including capability dispatch, BF16 conversions, float GEMM, quantized GEMV, and attention. Re-anchor the superseded `237ad9b96` citations in `cuda-arch-breadth-fp16.md` before relying on them. The executing chain must cite actual source paths and lines.
 
 ## Our baseline
 
 `CMakeLists.txt:202` selects architecture 121a by default. `cmake/CudaArchFeatures.cmake` resolves per-source architecture features. `src/vt/cuda/cuda_paged_attn.cu` contains guarded BF16 WMMA bodies and scalar fallbacks. `src/vt/cuda/cuda_matmul.cu` routes BF16 work to cuBLASLt, which requires a real legacy execution path. Existing historical breadth work is scoped in `cuda-arch-breadth-fp16.md`; `ISSUE-GH-146` remains open.
 
-## Design and port map
+## Design
 
 Use capability-based dispatch behind the existing CUDA backend. Add architecture-specific files for legacy hardware where new kernels are required. Route all model execution through the existing C API, loader, ModelRegistry::Forward, attention block, fusion, merged GEMM, and sampler. Preserve existing tensor storage formats unless an explicit documented adaptation is unavoidable. Keep all current `vllm_*` symbols, flags, configuration keys, filenames, and defaults on newer GPUs.
 
@@ -40,7 +40,7 @@ Use real pinned checkpoint weights fitting 2 GiB including KV cache, activations
 
 Declare workload axes before optimizing: batch 1, concurrency 1, prompt lengths 16 and 128, generated lengths 16 and 64, greedy sampling. If model limits or CLI reachability require adaptations, record the exact reason before execution. Correctness must pass first. Compare matching pinned-oracle execution on the identical device, artifact, and workload. Required performance floor: throughput ratio >=1, latency ratio <=1, memory ratio <=1 on every declared axis, reproduced on an idle device with the same binary. Unmet axes remain open, with a next traceable hypothesis. No ceiling claims.
 
-## Dependencies and risks
+## Dependencies
 
 Pinned source checkouts and model storage values are not configured. Source downloads needed to read the registered oracle are authorized task preparation; large checkpoint downloads still need user approval. Do not copy another developer's paths. The GPU is small, so broad model support cannot be inferred from a single fitting checkpoint. BF16, half, atomic, shared-memory, and tensor-core assumptions need separate inspection.
 
@@ -68,3 +68,62 @@ One issue-owned branch and one PR carry the spec before implementation. No push 
 ## Evidence
 
 Implementation and review evidence belongs in `.agents/evidence/pascal-volta-enable/`.
+
+## Pending gates
+
+- Owning issue `#146`: pinned real-checkpoint correctness and all declared performance axes. Model storage and downloads await developer approval.
+- Owning issue `#146`: P100 runtime validation and Volta hardware validation, including the toolkit-compatible pinned vLLM primary path.
+- Owning issue `#146`: native EXL3 GEMM and fused MoE for Pascal and Volta. The current Tensor Core kernels require sm_80 and refuse older GPUs. This does not refuse the portable GGUF k-quant arm.
+
+## Implementation decisions
+
+CUDA 12.4 cuBLASLt executes BF16 storage on P620 using CUDA-core float GEMV and `magma_sgemmEx_kernel`, confirmed by an Nsight Systems CUDA trace. Preserve that production path instead of adding a speculative replacement. The demonstrated runtime gap is batched F32 inputs with BF16 output. Only that lane on GPUs below sm_80 uses the new tiled CUDA fallback. Its FP32 accumulator follows the input type and stores BF16 directly, without a wider persistent weight or output buffer.
+
+Pinned llama.cpp `common.cuh:712-753` supplies the exact sm_60 DP4A emulation. The unsigned overload additionally preserves EXL3 byte sums. Both overloads accumulate modulo 2^32. The native DP4A instruction remains selected on sm_61 and newer.
+
+## Port map
+
+| Pinned source | Local destination | Adaptation |
+|---|---|---|
+| llama.cpp `62318cd57`, `ggml/src/ggml-cuda/common.cuh:712-753` | `src/vt/cuda/cuda_legacy_intrinsics.cuh` | Exact signed-byte DP4A emulation on sm_60; unsigned byte sums preserve EXL3 decoding. |
+| llama.cpp `62318cd57`, `ggml/src/ggml-cuda/ggml-cuda.cu:1672-1690` | `src/vt/cuda/cuda_legacy_matmul.cuh` | FP32 compute adaptation for the measured cuBLASLt F32 batched-to-BF16 gap; preserves tensor storage and shared dispatch. |
+| vLLM `a7c23ac96d`, `csrc/libtorch_stable/activation_kernels.cu:30-44,165-167` | `src/vt/cuda/cuda_ops.cu` | Legacy SiLU rounds its intermediate to input scalar type before multiplying, matching the scalar and packed upstream chain. |
+| Existing guarded local WMMA bodies and native EXL3 dispatch | `src/vt/cuda/cuda_paged_attn.cu`, `cuda_gdn.cu`, `cuda_exl3.cu` | Guard file-scope aliases; refuse unavailable EXL3 tensor instructions before launching. |
+
+## Owed
+
+No rowless issue is transferred to this row. The row-owned issue and Pending gates above retain all incomplete work.
+
+## Risks/decisions
+
+Preserve the existing BF16 cuBLASLt lane because the actual P620 trace confirms it executes. Restrict the F32-to-BF16 batched fallback to older capabilities and the measured unsupported lane. Guard native tensor instructions and reject unsupported EXL3 operations before launch. Runtime results on P620 do not validate Volta or P100. Correctness and performance debt remain explicit in Pending gates.
+
+## Production attention selection expansion
+
+Public-loader regression on P620 on 29 October 2026 fails before generation:
+`FLASH_ATTN: compute capability not supported`. This is tracked by
+`ISSUE-LOCAL-01M63MWPJR5Q5R2D24BDRS5RA5`.
+
+Keep upstream FLASH_ATTN's sm_80 minimum intact. Add a separate registered
+`CUDA_LEGACY` descriptor in a new hardware-specific source, with the existing
+NHD cache geometry and dense decoder-only portable kernels. The CUDA platform
+priority adds this descriptor only for major 6 or 7; its capability predicate
+accepts exactly sm_60, sm_61, and sm_70. Newer priorities remain byte-identical.
+The backend advertises only the BF16/F32 storage exercised by portable kernels,
+auto/BF16 KV storage, supported head geometry, and decoder attention. It does
+not advertise FP16 tensor-core optimization, MLA, sparse, sink, or quantized KV
+capabilities. All execution continues through the existing runner,
+`dense_attn::AttnBlock`, `vt::PagedAttention`, cache, and sampling seams.
+
+Secondary source: pinned llama.cpp `ggml/src/ggml-cuda/fattn.cu:757-775`
+selects portable tile/vector kernels as well as tensor instructions. This is a
+local descriptor adaptation for kernels already present here; no claim is made
+that vLLM implements a Pascal backend or that our descriptor ports FlashAttention.
+The actual model storage contract remains unchanged by selection.
+
+The synthetic public CAPI fixture must load and generate the same greedy tokens
+on CPU and CUDA for prompt lengths 1, 16, and 37, capture finite full logits,
+and refuse host reference fallback. Delete the legacy priority or registrar in
+a scratch build and require public load to reproduce the refusal. Host tests
+pin exact allowed capabilities and unsupported modes, and preserve sm_80+
+selection. This supplements, and never substitutes for, published-model gates.
