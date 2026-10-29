@@ -87,3 +87,15 @@ The two SiLU translation units also compile for sm80 and sm90. Compilation is no
 Two DFlash citations in `.agents/kernel-matrix.md` move with `cuda_ops.cu`.
 The rows are KERNEL-ATTN-DFLASH-BLOCK and KERNEL-ATTN-DFLASH-PAGED-BLOCK. Unrelated rows remain byte-identical.
 Independent mutation review and the final preflight remain PENDING.
+
+## Implementer mutation evidence
+
+Seven scratch mutations each exit 1 through the registered operation tests:
+selected-provider admission, deleted FP16 reverse-cast registration, reverse-cast payload format,
+residual rounding before variance, output payload format, merged SiLU rounding, and split SiLU rounding.
+`mutations.py` records the exact source edits, link recipe, and focused cases.
+The tracked source remains byte-identical because mutations use scratch copies.
+These results supplement the fresh review. They do not replace independent mutation review.
+`architecture-compiles.json` records the object hashes and matching source hashes for each architecture compile.
+The final preflight initially saw an undeclared role marker. The helper claim now exists.
+`role-only.log` records the corrected role gate. The original full preflight keeps its original result.
