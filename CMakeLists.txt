@@ -1123,6 +1123,7 @@ add_library(vllm STATIC
   src/vllm/model_executor/models/decision_scorer.cpp
   src/vllm/model_executor/models/nimble_inference.cpp
   src/vllm/model_executor/models/nimble_registry.cpp
+  src/vllm/model_executor/models/llama_gguf_weights.cpp
   src/vllm/model_executor/models/llama_weights.cpp
   src/vllm/model_executor/models/mistral_registry.cpp
   src/vllm/model_executor/models/mistral_weights.cpp
@@ -3127,6 +3128,9 @@ file(WRITE "${_vllm_shared_stub}"
 
 add_library(vllm_shared SHARED "${_vllm_shared_stub}")
 add_library(vllm::shared ALIAS vllm_shared)
+add_library(LumenEngine::LumenEngine ALIAS vllm_shared)
+add_library(LumenEngine::shared ALIAS vllm_shared)
+set_target_properties(vllm_shared PROPERTIES EXPORT_NAME shared)
 set_target_properties(vllm_shared PROPERTIES
   OUTPUT_NAME vllm
   ARCHIVE_OUTPUT_NAME vllm_shared
@@ -3206,11 +3210,26 @@ if(NOT VLLM_CPP_SANITIZE STREQUAL "OFF")
 endif()
 
 # make install => a consumable libvllm.so + libvllm.a + vllm.h (llama.cpp-style).
-install(TARGETS vllm vllm_shared
+install(TARGETS vllm
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(TARGETS vllm_shared EXPORT LumenEngineTargets
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(FILES include/vllm.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES include/vllm.h include/lumenengine.h
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+include(CMakePackageConfigHelpers)
+configure_package_config_file(cmake/LumenEngineConfig.cmake.in
+  "${CMAKE_CURRENT_BINARY_DIR}/LumenEngineConfig.cmake"
+  INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/LumenEngine")
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/LumenEngineConfigVersion.cmake"
+  VERSION ${PROJECT_VERSION} COMPATIBILITY SameMajorVersion)
+install(EXPORT LumenEngineTargets NAMESPACE vllm::
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/LumenEngine")
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/LumenEngineConfig.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/LumenEngineConfigVersion.cmake"
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/LumenEngine")
 
 if(VLLM_CPP_BUILD_TESTS)
   enable_testing()

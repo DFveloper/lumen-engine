@@ -830,7 +830,12 @@ __global__ void MoeSiluMulKernel(Tout* out, const Tg* gate, const Tu* up, int64_
   const int64_t step = static_cast<int64_t>(gridDim.x) * blockDim.x;
   for (int64_t i = static_cast<int64_t>(blockIdx.x) * blockDim.x + threadIdx.x; i < n; i += step) {
     const float g = Load(gate, i);
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 750
+    // vLLM a7c23ac96d activation_kernels.cu:165-167 returns the gate type.
+    const float s = static_cast<float>(static_cast<Tg>(g / (1.0f + expf(-g))));
+#else
     const float s = g / (1.0f + expf(-g));
+#endif
     Store(out, i, s * Load(up, i));
   }
 }

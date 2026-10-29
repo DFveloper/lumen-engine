@@ -1,6 +1,8 @@
-# Building vllm.cpp
+# Building LumenEngine
 
-vllm.cpp uses CMake (>= 3.24) and a C++20 compiler (gcc 13/14 and clang are
+<a id="building-vllmcpp"></a>
+
+LumenEngine uses CMake (>= 3.24) and a C++20 compiler (gcc 13/14 and clang are
 exercised; the tree builds -Werror-clean on gcc 14.2). The text engine uses its own tensor runtime.
 The default build includes parakeet.cpp for diarization, with its ggml dependency.
 The OpenAI server uses the vendored header-only HTTP transport cpp-httplib.
@@ -321,3 +323,30 @@ measured results.
 
 Runtime environment variables are in the
 [environment-variable reference](ENVIRONMENT.md).
+
+## Compatible LumenEngine names
+
+Existing CMake options, `libvllm` filenames, and command names remain supported.
+The build adds `lumenengine-cli`, `lumenengine-server`, and `lumenengine-bench`
+as copies of the existing commands. Build these targets before installation.
+The server alias exists when `VLLM_CPP_SERVER` is enabled.
+
+Install the libraries, headers, package, and built command aliases with:
+
+```sh
+cmake --build build --target lumenengine-cli lumenengine-server lumenengine-bench -j4
+cmake --install build --prefix /path/to/install
+```
+
+An external CMake project can consume the shared C ABI:
+
+```cmake
+find_package(LumenEngine CONFIG REQUIRED)
+target_link_libraries(my_app PRIVATE LumenEngine::shared)
+```
+
+Pass `-DCMAKE_PREFIX_PATH=/path/to/install` when configuring that project.
+`LumenEngine::LumenEngine` selects the same shared library.
+Both names also work with `add_subdirectory` in a build tree.
+`vllm::shared` remains supported. The static `vllm::vllm` target remains
+available in the build tree. The installed package exposes the shared C ABI.

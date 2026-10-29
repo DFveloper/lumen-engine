@@ -176,3 +176,70 @@ Keep legacy capability, dtype, attention mode, and newer GPU controls.
 Compile the complete host selector suite and mutate each claimed metadata
 predicate in scratch objects. Require each mutation to fail the focused test.
 This host gate supplements the public CUDA execution and real-model gates.
+
+## Final local verification
+
+The complete Release build and final independent local gate pass at combined source `011dbdc97`. See [final verification](../evidence/pascal-volta-enable/final-verification/README.md). Published-checkpoint correctness and performance remain PENDING approved weights. P100 runtime and Volta runtime remain PENDING hardware. Volta optimization remains TODO. This evidence does not move the row to DONE or close its issues.
+
+## Quantized dense projection shards
+
+`ISSUE-LOCAL-01M63VRMM7HCJJ1MN1QSEVT88E` owns the dense projection representation gap exposed by the real Llama GGUF gate. Keep each Q, K, V, gate, and up shard in its original block encoding. The published TinyLlama artifact has Q4_K Q/K and Q6_K V. SmolLM2 has Q5_0 Q/K and Q8_0 V. A homogeneous merged tensor cannot represent either group.
+
+Append optional `qkv_proj_parts` and `gate_up_proj_parts` owners to the shared dense weight container. Empty parts preserve every existing path. The Llama GGUF adapter alone populates the new parts. The adapter owns inverse Q/K row permutations, moving whole packed rows rather than decoding blocks.
+
+Add a dense realization of `vt::MergedGemmGroup` with contiguous per-shard products. Route each contraction through `vt::MatmulBT`, which already selects registered quantized operators by weight dtype. QKV has arity 3 and no epilogue. Gate/up has arity 2 and the existing split SwiGLU epilogue. A new `MlpGateUpMethodBase` method owns the gate/up products and BF16 activation boundary. The existing attention block consumes Q/K/V products. Do not add a parallel model forward or GPU-specific model branch.
+
+Pinned llama.cpp `62318cd57` executes original quantized matrices through `llama_model_loader` and the `GGML_OP_MUL_MAT` CUDA chain. The existing shared `MatmulBTQuant` implementation already ports those block-dot semantics. This slice changes representation and wiring, not quant arithmetic. Test heterogeneous shard products and gate/up equivalence through the methods, then require the Llama public real-model gate to reach the parts. Deleting the production parts call must fail its focused regression. Compare stored bytes and dtypes with the checkpoint. Full real-model correctness and performance remain open until measured.
+
+## Legacy split SwiGLU input-width boundary
+
+`ISSUE-LOCAL-01M63W80J6R0M1JXTQ5P1ENWGN` owns the split SwiGLU rounding mismatch. Pinned vLLM `a7c23ac96d` activation kernels return the gate scalar type from SiLU before multiplying the up scalar. The CPU split kernel and the repaired legacy merged kernel implement that boundary. On pre-sm75 devices, narrow CUDA `MoeSiluMul`'s SiLU result through its gate input type before multiplication. Preserve sm75 and newer behavior. Add a registered-op BF16-gate, BF16-up, F32-output comparison against CPU, then disable the narrowing in a scratch production CUDA translation unit and require failure. This supplies the numerical contract for the new quantized shard MLP method without copying and concatenating activation buffers.
+
+## Llama GGUF adapter for the real-model gate
+
+`ISSUE-LOCAL-01M63VJCK05BTSAMDXVWT60E2T` records the public loader refusal for
+the approved SmolLM2-135M and TinyLlama-1.1B checkpoints. Implement an explicit
+Llama GGUF adapter into the existing registered Llama model and shared dense
+forward. Build a Llama HF-shaped config from the llama metadata prefix. Reuse
+the existing dense GGUF tensor ownership, quantized residency, merged QKV, and
+merged gate/up loader through a named shared helper. No Q/K norm is introduced.
+Undo the converter's Llama Q/K row permutation before the shared HF NeoX RoPE
+path. Preserve tied output detection and GQA geometry.
+
+Pinned source anchors: llama.cpp `62318cd57`, `conversion/llama.py:175-181,
+255-264` converts HF Q/K rows into interleaved GGUF order. The inverse maps
+HF row `a * D/2 + b` from GGUF row `2*b+a`, independently for each head.
+vLLM `a7c23ac96`, `vllm/model_executor/models/llama.py` owns the shared QKV,
+SwiGLU, RMSNorm, and HF RoPE behavior. The first-party GGUF plugin remains the
+primary GGUF reference where it executes. Pascal comparison uses the pinned
+llama.cpp secondary because the pinned vLLM excludes Pascal targets.
+
+Initial accepted GGUF geometry is the plain full-RoPE Llama family represented
+by the two approved checkpoints. Refuse scaling metadata and rope-frequency
+sidecars, Q/K norm tensors, and bias tensors with precise missing-arm messages,
+rather than silently accepting unimplemented semantics. These broader arms
+remain owed under this issue. Existing HF Llama and Qwen3 paths stay unchanged.
+
+The failing test enters through public `vllm_engine_load` and completion using
+the approved real artifacts. Add a focused deterministic adapter test for config,
+GQA, tied output, inverse Q/K rows, quantized ownership, and refusal cases.
+Mutation removes the production dispatch and separately the Q/K inverse and
+requires focused tests to fail. Build changed production translation units with
+the existing Release recipe. Run real-model public completion on P620 under the
+GPU lock, then let the operator run identical pinned-oracle token gates.
+
+## Published GGUF tokenizer repair
+
+Issue: `ISSUE-LOCAL-01M63W5W3MTWY1KXRRD77FBG5D`.
+The approved SmolLM2 checkpoint carries `smollm`; TinyLlama carries the `llama`
+SentencePiece family. Load both through the existing tokenizer surface. Pin
+llama.cpp `62318cd57` `src/llama-vocab.cpp:111-246,362-371,2097-2107,2564-2595,3579-3633`.
+SmolLM isolates each Unicode number before the existing GPT-2 pretokenizer.
+SentencePiece uses score-ranked adjacent merges, highest score then leftmost,
+with UTF-8 symbols and byte fallback after merging. Reuse existing metaspace
+and special-token surfaces, retaining SPM prefix and raw-byte decode semantics.
+Honor GGUF BOS/EOS metadata for `EncodeWithSpecialTokens`; `Encode` adds none.
+Test synthetic score order, whitespace, byte fallback, special tokens, malformed
+metadata, and digit splitting. Compare actual checkpoint encode/decode against
+the pinned oracle. Mutate each new production branch and require failure.
+No model forward, quantization, or CUDA kernel changes belong to this repair.

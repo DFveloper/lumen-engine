@@ -1137,6 +1137,8 @@ target_include_directories(test_laguna_gguf_load PRIVATE ${CMAKE_SOURCE_DIR}/src
 
 # The qwen3 GGUF loader (`Qwen3HfConfigFromGguf`, `LoadQwen3FromGguf`). Synthetic
 # GGUF via gguf_builder.h; no model file needed. Needs tests/vllm for gguf_builder.h.
+vllm_cpp_add_test(test_llama_gguf_weights vllm/models/test_llama_gguf_weights.cpp)
+target_include_directories(test_llama_gguf_weights PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vllm)
 vllm_cpp_add_test(test_qwen3_gguf_weights vllm/models/test_qwen3_gguf_weights.cpp)
 target_include_directories(test_qwen3_gguf_weights PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vllm)
 
@@ -3132,6 +3134,25 @@ target_link_libraries(vllm_capi_c_check PRIVATE vllm::vllm)
 target_compile_options(vllm_capi_c_check PRIVATE
   $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra -Werror -std=c11>)
 
+# Test each public header in its own translation unit.
+add_executable(test_lumenengine_legacy_header_cpp branding/legacy_consumer.cpp)
+target_link_libraries(test_lumenengine_legacy_header_cpp PRIVATE vllm::shared)
+vllm_cpp_set_warnings(test_lumenengine_legacy_header_cpp)
+add_test(NAME test_lumenengine_legacy_header_cpp COMMAND test_lumenengine_legacy_header_cpp)
+add_executable(test_lumenengine_legacy_header_c branding/legacy_consumer.c)
+target_link_libraries(test_lumenengine_legacy_header_c PRIVATE vllm::shared)
+vllm_cpp_set_warnings(test_lumenengine_legacy_header_c)
+add_test(NAME test_lumenengine_legacy_header_c COMMAND test_lumenengine_legacy_header_c)
+# Additive public names must remain available to ordinary CTest consumers.
+add_executable(test_lumenengine_header_cpp branding/consumer.cpp)
+target_link_libraries(test_lumenengine_header_cpp PRIVATE LumenEngine::LumenEngine)
+vllm_cpp_set_warnings(test_lumenengine_header_cpp)
+add_test(NAME test_lumenengine_header_cpp COMMAND test_lumenengine_header_cpp)
+add_executable(test_lumenengine_header_c branding/consumer.c)
+target_link_libraries(test_lumenengine_header_c PRIVATE LumenEngine::shared)
+vllm_cpp_set_warnings(test_lumenengine_header_c)
+add_test(NAME test_lumenengine_header_c COMMAND test_lumenengine_header_c)
+
 # ── Packaging DoD (M3.5 Task 3): dlopen the built libvllm.so + verify exports ──
 # These are gated on the shared-lib target existing. The dlopen smoke test links
 # ONLY the doctest main + ${CMAKE_DL_LIBS} (NOT libvllm) — it resolves the whole
@@ -3198,7 +3219,7 @@ vllm_cpp_add_test(test_dtype vt/test_dtype.cpp)
 vllm_cpp_add_test(test_backend vt/test_backend.cpp)
 add_executable(test_vulkan_loader
   vt/test_vulkan_loader.cpp
-  ${CMAKE_SOURCE_DIR}/src/vt/vulkan/vulkan_loader.cpp)
+  ${PROJECT_SOURCE_DIR}/src/vt/vulkan/vulkan_loader.cpp)
 target_include_directories(test_vulkan_loader PRIVATE
   ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(test_vulkan_loader PRIVATE vllm_test_main ${CMAKE_DL_LIBS})
