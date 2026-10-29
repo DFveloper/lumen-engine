@@ -16,4 +16,4 @@ CUDA_LEGACY accepts head dimension 256, but portable prefill allocates 65536 byt
 
 ## Resolution
 
--
+29 October 2026: repair commit `0af408b79` selects a fitting runtime key tile on legacy GPUs. The nine public CPU/CUDA cases pass, and disabling selection reproduces the original failure. Evidence: `.agents/evidence/pascal-volta-enable/smem-repair/SUMMARY.md`. Integration, independent review, and the operator gate remain pending. The issue stays open until landing.
