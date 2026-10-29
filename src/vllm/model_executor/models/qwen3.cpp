@@ -370,8 +370,9 @@ DBuf ForwardLayers(Dev d, const Tensor& hidden_in,
   }
 
   // lm_head. Tied (Qwen3-0.6B): logits = hidden @ embed_tokens^T via MatmulBT
-  // over the [vocab,H] embed table (== [N=vocab,K=H]). Untied: the loaded
-  // Matmul-B [H,vocab] lm_head via vt::Matmul.
+  // over the [vocab,H] embed table (== [N=vocab,K=H]). Untied GGUF heads
+  // retain that NK layout, including quantized blocks. HF Matmul-B heads
+  // retain [H,vocab] and use vt::Matmul.
   // QUANT-EXL3 (#2181): an EXL3 checkpoint ships a REAL quantized head and does
   // not tie it. Its width is its own -- 6-bit against a 3-bit body in the
   // published 3.0bpw quant -- which is why nothing here reads a config scalar.
@@ -382,7 +383,7 @@ DBuf ForwardLayers(Dev d, const Tensor& hidden_in,
   Tensor lm = tied ? ResidentWeight(d, weights.embed_tokens, {vocab, H})
                    : ResidentWeight(d, weights.lm_head);
   DBuf logits(d, DType::kF32, {n_out, vocab});
-  if (tied)
+  if (tied || weights.lm_head.nk)
     vt::MatmulBT(d.q, logits.t(), src, lm);
   else
     vt::Matmul(d.q, logits.t(), src, lm);

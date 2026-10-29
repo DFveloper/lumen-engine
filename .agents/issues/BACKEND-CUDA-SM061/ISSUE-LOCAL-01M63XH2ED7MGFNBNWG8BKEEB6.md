@@ -16,4 +16,9 @@ TinyLlama GGUF output.weight retains original quantized [vocab, hidden] NK layou
 
 ## Resolution
 
--
+29 October 2026: dispatch untied NK heads through the existing MatmulBT seam.
+The small public quantized-head regression and real TinyLlama generation pass.
+Reverting the branch reproduces both failures. Evidence:
+`.agents/evidence/pascal-volta-enable/untied-head-repair/`.
+
+The issue stays OPEN until landing. Oracle and performance gates remain owed.
