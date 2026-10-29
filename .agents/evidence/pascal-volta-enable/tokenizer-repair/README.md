@@ -70,6 +70,7 @@ commands and logs remain under `/tmp/tokenizer-scratch`. No GPU is used.
 `Tokenizer` private state grows. Recompile every holder and caller against the
 updated header before model integration. The operator owns that full build.
 The bounded startup preflight reaches repository checks and is interrupted at
-45 seconds; it is not a green full preflight. Record and whitespace checks
-pass. Independent review and real-model inference remain required. Issues
+45 seconds; it is not a green full preflight. After updating seven directly
+invalidated tokenizer anchors, `scripts/check-agent-record.py` passes with
+`ANCHOR-ROT=0`; `git diff --check` also passes. Independent review and real-model inference remain required. Issues
 remain open until landing. No merge, remote write, or model forward occurs.
