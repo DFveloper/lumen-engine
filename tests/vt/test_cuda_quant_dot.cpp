@@ -280,6 +280,35 @@ bool PascalQ5Oracle(DType dtype, int64_t m) {
 #endif
 }
 
+bool PascalQ6Oracle(DType dtype, int64_t m) {
+#ifdef VLLM_CPP_CUDA
+  cudaDeviceProp prop{};
+  REQUIRE(cudaGetDeviceProperties(&prop, 0) == cudaSuccess);
+  return prop.major == 6 && dtype == DType::kQ6_K && m == 1;
+#else
+  return false;
+#endif
+}
+
+void Q6GpuOracle(std::vector<float>& result, const std::vector<float>& a,
+                 const std::vector<uint8_t>& wq, int64_t n, int64_t k) {
+  std::vector<float> decoded(n * k), reconstructed(k);
+  vt::cpu::BlockToFloat(DType::kQ6_K)(wq.data(), decoded.data(), n * k);
+  for (int64_t b = 0; b < k / 32; ++b) {
+    float amax = 0;
+    for (int j = 0; j < 32; ++j) amax = std::max(amax, std::abs(a[b * 32 + j]));
+    const float d = amax / 127.0f;
+    const float hd = vt::F16ToF32(vt::F32ToF16(d));
+    for (int j = 0; j < 32; ++j)
+      reconstructed[b * 32 + j] = d == 0 ? 0 : std::round(a[b * 32 + j] / d) * hd;
+  }
+  for (int64_t row = 0; row < n; ++row) {
+    double sum = 0;
+    for (int64_t j = 0; j < k; ++j) sum += double(decoded[row * k + j]) * reconstructed[j];
+    result[row] = static_cast<float>(sum);
+  }
+}
+
 void Q5GpuOracle(std::vector<float>& cpu_out, const std::vector<float>& a,
                  const std::vector<uint8_t>& wq, int64_t n, int64_t nb) {
             for (int64_t row = 0; row < n; ++row) {
@@ -356,6 +385,8 @@ TEST_CASE("CUDA keep-quant GEMM == CPU reference and f64 dequant (Q8_K family + 
 
         if (PascalQ5Oracle(c.dtype, m))
           Q5GpuOracle(cpu_out, a, wq, n, k / c.block_elems);
+        if (PascalQ6Oracle(c.dtype, m)) Q6GpuOracle(cpu_out, a, wq, n, k);
+
 
         // --- CUDA path (device tensors, unified pool) -------------------------
         void* d_a = gpu.Alloc(a.size() * sizeof(float));
@@ -2141,5 +2172,48 @@ TEST_CASE("Pascal Q5_0 decode uses the GPU oracle original activation sum") {
   gpu.Synchronize(q);
   gpu.Free(da); gpu.Free(dw); gpu.Free(dout);
   CHECK(actual == doctest::Approx(expected).epsilon(1e-6));
+#endif
+}
+
+TEST_CASE("Pascal Q6_K decode matches independently reconstructed GPU Q8_1 activations") {
+#ifdef VLLM_CPP_CUDA
+  if (!HasCuda()) return;
+  cudaDeviceProp prop{};
+  REQUIRE(cudaGetDeviceProperties(&prop, 0) == cudaSuccess);
+  if (prop.major != 6) return;
+  Backend& gpu = vt::GetBackend(DeviceType::kCUDA);
+  Queue q = gpu.CreateQueue();
+  const WeightCase c{DType::kQ6_K, 256, 210, 208, -1, "q6_K"};
+  for (int64_t k : {256, 1536, 2048}) {
+    CAPTURE(k);
+    constexpr int64_t n = 7;
+    const auto w = RandomBlocks(c, n * k / 256, 351);
+    std::vector<float> dequant(n * k), a(k), reconstructed(k);
+    vt::cpu::BlockToFloat(c.dtype)(w.data(), dequant.data(), n * k);
+    for (int64_t j = 0; j < k; ++j) a[j] = std::sin(j * .31f) * (1 + (j / 32) % 8);
+    for (int64_t b = 0; b < k / 32; ++b) {
+      float amax = 0;
+      for (int j = 0; j < 32; ++j) amax = std::max(amax, std::abs(a[b * 32 + j]));
+      const float d = amax / 127.0f;
+      const float hd = vt::F16ToF32(vt::F32ToF16(d));
+      for (int j = 0; j < 32; ++j)
+        reconstructed[b * 32 + j] = std::round(a[b * 32 + j] / d) * hd;
+    }
+    void* da = gpu.Alloc(k * 4); void* dw = gpu.Alloc(w.size()); void* dout = gpu.Alloc(n * 4);
+    gpu.Copy(q, da, a.data(), k * 4); gpu.Copy(q, dw, w.data(), w.size());
+    Tensor at = DevTensor(da, DType::kF32, {1, k});
+    Tensor wt = DevTensor(dw, c.dtype, {n, k});
+    Tensor ot = DevTensor(dout, DType::kF32, {1, n});
+    vt::MatmulBTQuant(q, ot, at, wt);
+    std::vector<float> actual(n);
+    gpu.Copy(q, actual.data(), dout, n * 4); gpu.Synchronize(q);
+    gpu.Free(da); gpu.Free(dw); gpu.Free(dout);
+    for (int64_t row = 0; row < n; ++row) {
+      double expected = 0;
+      for (int64_t j = 0; j < k; ++j) expected += double(dequant[row * k + j]) * reconstructed[j];
+      CHECK(actual[row] == doctest::Approx(expected).epsilon(2e-5).scale(1));
+    }
+  }
+  gpu.DestroyQueue(q);
 #endif
 }
