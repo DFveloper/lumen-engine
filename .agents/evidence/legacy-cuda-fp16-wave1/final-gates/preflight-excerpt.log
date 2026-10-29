@@ -64,11 +64,11 @@ Record gates:
   ok   check-deepseek-v4-vision-manifests.py
   FAIL check-device-leakage.py
          ERROR: DSR REGRESSION in bucket 'kcuda': 1 > baseline 0. A device-specific reference was added to the device-agnostic shared layer. Ask the op/provider table the question instead (vt::OpRegistered / Platform capability), or — if the site is genuinely the platform leg — add it to ALLOWLIST with a reason. NEVER raise the baseline to make this pass.
-         
+
          check-device-leakage: FAIL (1 error(s))
          DSR-ALLOW exemptions in force: 21
 
-         
+
          check-device-leakage: FAIL (1 error(s))
          DSR-ALLOW exemptions in force: 21
            DSR-ALLOW src/vllm/entrypoints/openai/server_main.cpp:57 [vt_ifdef] #if defined(VT_BENCH_PROFILE_CONTROL) && !defined(_WIN32)
@@ -98,4 +98,3 @@ PREFLIGHT_INTERRUPTED_BEFORE_DEFAULT_EIGHT_WORKER_COMPILE
 
 
 PREFLIGHT_INTERRUPTED_BEFORE_DEFAULT_EIGHT_WORKER_COMPILE
-
