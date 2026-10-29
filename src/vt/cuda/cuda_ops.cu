@@ -74,9 +74,9 @@ __device__ inline void Store(__nv_bfloat16* p, int64_t i, float v) {
 // AHEAD of this project's pin 5559679229, a forward reference, #2502), and
 // `CudaPlatform::supported_dtypes` already promises kF16 (platforms/cuda.cpp:112).
 //
-// kF16 is admitted ONLY as a gamma. `Tin` (the activation) and `out` are still
-// f32/bf16 on this arm, which is a SEPARATE divergence of the same class and is
-// recorded, not fixed, here (#2542).
+// The earlier gamma-only extension left activation/output support owed (#2542).
+// The shared FP16 scalar arm now also admits half activations and outputs;
+// the gamma loader above remains valid for all three scalar formats.
 __device__ inline float Load(const __half* p, int64_t i) { return __half2float(p[i]); }
 
 template <int N>

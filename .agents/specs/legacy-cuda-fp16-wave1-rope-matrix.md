@@ -2,7 +2,8 @@
 
 ## Now
 
-SPECIFIED. Repair of independent review P2 and P3 at immutable6c785c4a8.
+IMPLEMENTED. Repair of independent review P2 and P3 at immutable6c785c4a8.
+Fresh scoped review and operator acceptance remain pending.
 Issue: ISSUE-LOCAL-01M645FSTTEMK6E7QHQ183ZD3F.
 Parent design: legacy-cuda-fp16-dense.md. Row: BACKEND-CUDA-SM061.
 
@@ -44,3 +45,10 @@ fresh scoped review and operator rerun remain required.
 
 Fresh review and operator acceptance remain required. Parent Wave4 owns staged
 automatic model wiring; this test repair supplies no model/runtime acceptance.
+
+## Implementation evidence
+
+See [scoped repair evidence](../evidence/legacy-cuda-fp16-wave1-rope-matrix/README.md).
+The full scalar suite passes 14 cases and 3428 assertions. Each dtype call-site
+mutation fails the new matrix; the old BF16 omission remains demonstrated.
+No product numerical source changes or model acceptance are claimed.
