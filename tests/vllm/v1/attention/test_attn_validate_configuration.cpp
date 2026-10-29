@@ -515,3 +515,77 @@ TEST_CASE("legacy CUDA selects portable attention without changing FLASH_ATTN") 
   CHECK_FALSE(legacy->is_sparse());
   CHECK(legacy->get_kv_cache_shape(4, 16, 1, 64) == std::vector<int64_t>{4, 2, 16, 1, 64});
 }
+
+TEST_CASE("legacy CUDA pins head and block geometry through the registered selector") {
+  FakeCudaPlatform pascal(6, 1);
+  for (const int head : {8, 16, 64, 128, 192, 256}) {
+    CAPTURE(head);
+    auto cfg = GateModelConfig();
+    cfg.head_size = head;
+    CHECK(SelectAttentionBackendName(pascal, "CUDA_LEGACY", cfg) == "CUDA_LEGACY");
+  }
+  for (const int head : {-8, 0, 7, 17, 255, 264}) {
+    CAPTURE(head);
+    auto cfg = GateModelConfig();
+    cfg.head_size = head;
+    CHECK_THROWS_AS(SelectAttentionBackendName(pascal, "CUDA_LEGACY", cfg), std::invalid_argument);
+  }
+  // Match the base predicate's MultipleOf(16) and zero-as-unspecified rules.
+  for (const int block : {0, 16, 32, 64}) {
+    CAPTURE(block);
+    auto cfg = GateModelConfig();
+    cfg.block_size = block;
+    CHECK(SelectAttentionBackendName(pascal, "CUDA_LEGACY", cfg) == "CUDA_LEGACY");
+  }
+  for (const int block : {8, 24}) {
+    CAPTURE(block);
+    auto cfg = GateModelConfig();
+    cfg.block_size = block;
+    CHECK_THROWS_AS(SelectAttentionBackendName(pascal, "CUDA_LEGACY", cfg), std::invalid_argument);
+  }
+  const auto legacy = MakeAttentionBackend(DeviceType::kCUDA, "CUDA_LEGACY");
+  CHECK(legacy->get_name() == "CUDA_LEGACY");
+  CHECK(legacy->get_kv_cache_shape(4, 32, 1, 256) == std::vector<int64_t>{4, 2, 32, 1, 256});
+  CHECK_THROWS_AS(legacy->get_kv_cache_shape(4, 24, 1, 256), std::invalid_argument);
+}
+
+TEST_CASE("legacy CUDA pins supported storage through the registered selector") {
+  FakeCudaPlatform volta(7, 0);
+  for (const auto dtype : {DType::kBF16, DType::kF32}) {
+    for (const auto kv : {"", "auto", "bfloat16"}) {
+      CAPTURE(kv);
+      auto cfg = GateModelConfig();
+      cfg.dtype = dtype;
+      cfg.kv_cache_dtype = kv;
+      CHECK(SelectAttentionBackendName(volta, "CUDA_LEGACY", cfg) == "CUDA_LEGACY");
+    }
+  }
+  for (const auto kv : {"float16", "fp8", "fp8_e4m3", "fp8_e5m2"}) {
+    CAPTURE(kv);
+    auto cfg = GateModelConfig();
+    cfg.kv_cache_dtype = kv;
+    CHECK_THROWS_AS(SelectAttentionBackendName(volta, "CUDA_LEGACY", cfg), std::invalid_argument);
+  }
+}
+
+TEST_CASE("legacy CUDA refuses unsupported request modes through the registered selector") {
+  FakeCudaPlatform pascal(6, 1);
+  using Flag = bool AttnSelectorConfig::*;
+  const Flag unsupported[] = {
+      &AttnSelectorConfig::use_mla, &AttnSelectorConfig::use_sparse,
+      &AttnSelectorConfig::has_sink, &AttnSelectorConfig::use_mm_prefix,
+      &AttnSelectorConfig::use_per_head_quant_scales,
+      &AttnSelectorConfig::has_sliding_window, &AttnSelectorConfig::use_non_causal,
+      &AttnSelectorConfig::use_batch_invariant, &AttnSelectorConfig::use_kv_connector,
+      &AttnSelectorConfig::use_pcp};
+  for (const auto flag : unsupported) {
+    auto cfg = GateModelConfig();
+    cfg.*flag = true;
+    CHECK_THROWS_AS(SelectAttentionBackendName(pascal, "CUDA_LEGACY", cfg), std::invalid_argument);
+  }
+  for (const auto type : {"encoder", "encoder_only", "encoder_decoder"}) {
+    auto cfg = GateModelConfig();
+    cfg.attn_type = type;
+    CHECK_THROWS_AS(SelectAttentionBackendName(pascal, "CUDA_LEGACY", cfg), std::invalid_argument);
+  }
+}
