@@ -194,3 +194,14 @@ Pinned llama.cpp `62318cd57` executes original quantized matrices through `llama
 ## Legacy split SwiGLU input-width boundary
 
 `ISSUE-LOCAL-01M63W80J6R0M1JXTQ5P1ENWGN` owns the split SwiGLU rounding mismatch. Pinned vLLM `a7c23ac96d` activation kernels return the gate scalar type from SiLU before multiplying the up scalar. The CPU split kernel and the repaired legacy merged kernel implement that boundary. On pre-sm75 devices, narrow CUDA `MoeSiluMul`'s SiLU result through its gate input type before multiplication. Preserve sm75 and newer behavior. Add a registered-op BF16-gate, BF16-up, F32-output comparison against CPU, then disable the narrowing in a scratch production CUDA translation unit and require failure. This supplies the numerical contract for the new quantized shard MLP method without copying and concatenating activation buffers.
+
+## Dense shard descriptor contract regression
+
+`ISSUE-LOCAL-01M63WWWN3EETEG29PF1ME9BNN` records four guard mutations that
+escaped the valid-only dense shard tests. Preserve production behavior. Add
+malformed descriptors through `vt::MergedGemmDense` for count and array
+contracts, unsupported fused providers, epilogue arity, and epilogue outputs.
+Use allocated, valid operands where a removed guard can continue safely.
+Require the exact guard diagnostic and exception type. Each removed guard
+must fail the focused host suite, then restore the complete passing suite.
+The shared production implementation and real-model gates remain unchanged.
