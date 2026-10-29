@@ -139,3 +139,27 @@ This provenance records shared sm_60, sm_61, and sm_70 build work. It does not
 claim P100 or Volta runtime validation, or real-checkpoint performance.
 
 Repair issue: `ISSUE-LOCAL-01M63NAHP61SNGD5ZBQM9BGCA8`.
+
+## Legacy prefill shared-memory repair
+
+`ISSUE-LOCAL-01M63NES5TYK3E3WH5B50XVAPP` records the independent P620 failure
+for a valid head dimension of 256. The portable prefill stages 32 keys and
+values as F32, requiring 65536 bytes against the queried 49152-byte limit.
+
+Keep the existing portable online-softmax kernel and its key accumulation order.
+On a valid pre-sm_80 device, halve the runtime key tile until both F32 staging
+buffers fit the queried per-block shared-memory limit. Preserve the default tile
+on sm_80 and newer. The existing capability probe and launch guard remain the
+source of the hardware limit. Pinned llama.cpp `fattn.cu:757-775` at
+`62318cd57dc63900ecb153272c0b10f78550855d` selects tile/vector implementations
+for non-MMA paths. This repair adapts the already executing local tile kernel.
+
+Parameterize the existing synthetic public-loader fixture with an optional head
+dimension, preserving the original 64 default. Exercise 64, 128, and 256 heads
+through CPU and CUDA public completion for prompt lengths 1, 16, and 37.
+The model width is 256, so a head dimension of 192 cannot define an integral
+head count and is not a valid variant of this fixture. Capture finite full
+logits, equal greedy tokens, and no CPU reference fallback. Reverting the tile
+selection must reproduce the public completion failure. Real-checkpoint gates
+remain separate and pending. Full sm_60/61/70 build and operator verification
+remain required after this repair is integrated.
