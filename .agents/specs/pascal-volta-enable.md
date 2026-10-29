@@ -254,3 +254,20 @@ Use allocated, valid operands where a removed guard can continue safely.
 Require the exact guard diagnostic and exception type. Each removed guard
 must fail the focused host suite, then restore the complete passing suite.
 The shared production implementation and real-model gates remain unchanged.
+
+## Untied original-format dense output head repair
+
+`ISSUE-LOCAL-01M63XH2ED7MGFNBNWG8BKEEB6` records the real TinyLlama forward
+failure after successful public load. Its untied GGUF output head retains
+original `[vocab, hidden]` NK layout and quantized storage. The shared dense
+forward incorrectly assumes every untied head is transposed `[hidden, vocab]`.
+Select `vt::MatmulBT` for tied or NK-owned heads, preserving `vt::Matmul` for
+existing transposed HF heads. Keep the resident weight and registered quant
+contraction seams, without a copy or reshaping the mismatched tensor.
+
+Add a small untied quantized GGUF public completion test. The production
+loader, registry, forward, and sampler must reach the fixed projection.
+Require completion and finite full logits. Reverting the head dispatch must
+reproduce the inner-dimension error, including on the pinned TinyLlama model.
+Preserve tied-head and existing non-NK paths. Full model oracle and performance
+gates remain separate obligations after this correctness repair.
