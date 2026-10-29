@@ -2311,7 +2311,16 @@ void LaunchPrefillFlash(cudaStream_t s, Tensor& out, const Tensor& query, const 
       BuildPrefillTiles(s, query_start_loc, args, num_reqs, kBM, &d_tiles);
   if (num_tiles == 0) return;
 
-  const int bn = kBN;
+  int bn = kBN;
+  const DeviceCaps& caps = GetDeviceCaps();
+  if (caps.valid && caps.sm_major < 8 && caps.max_shared_memory_per_block_optin > 0) {
+    // The portable kernel accepts a runtime key tile. Keep the same key order
+    // when a legacy device cannot stage 32 F32 keys and values for this head.
+    while (bn > 1 && static_cast<size_t>(2) * bn * d * sizeof(float) >
+                         static_cast<size_t>(caps.max_shared_memory_per_block_optin)) {
+      bn /= 2;
+    }
+  }
   const size_t shmem = static_cast<size_t>(2) * bn * d * sizeof(float);
   auto* kernel = args.window_size.has_value()
                      ? PagedFlashKernel<TQ, TKV, Tout, true>

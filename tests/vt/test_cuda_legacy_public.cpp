@@ -69,14 +69,16 @@ int main() {
   if (cudaGetDeviceCount(&count) != cudaSuccess || count == 0) return 77;
   try {
     const rocm_gather_test::Format q4{vt::DType::kQ4_K, 12, "Q4_K"};
-    gguf_test::TempFile file(rocm_gather_test::BuildModel(q4, true));
-    for (int prompt : {1, 16, 37}) {
-      const auto cpu = Run(file.path(), 1, prompt);
-      const auto gpu = Run(file.path(), 2, prompt);
-      Require(cpu.ids == gpu.ids, "CPU/CUDA greedy token mismatch");
-      std::printf("synthetic public CPU/CUDA prompt=%d ids=", prompt);
-      for (auto id : gpu.ids) std::printf(" %d", id);
-      std::puts("");
+    for (uint32_t head_dim : {64u, 128u, 256u}) {
+      gguf_test::TempFile file(rocm_gather_test::BuildModel(q4, true, nullptr, nullptr, head_dim));
+      for (int prompt : {1, 16, 37}) {
+        const auto cpu = Run(file.path(), 1, prompt);
+        const auto gpu = Run(file.path(), 2, prompt);
+        Require(cpu.ids == gpu.ids, "CPU/CUDA greedy token mismatch");
+        std::printf("synthetic public CPU/CUDA head_dim=%u prompt=%d ids=", head_dim, prompt);
+        for (auto id : gpu.ids) std::printf(" %d", id);
+        std::puts("");
+      }
     }
   } catch (const std::exception& error) {
     std::fprintf(stderr, "%s\n", error.what());
