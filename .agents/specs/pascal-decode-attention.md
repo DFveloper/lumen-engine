@@ -69,3 +69,18 @@ The same executable checks numerical correctness in each mode.
 A dispatch deletion and an override bypass must fail the regression.
 Compile the repair for sm60, sm61, and sm70, and rerun the existing 197 numerical cases.
 Performance acceptance remains pending fresh review and the operator gate.
+
+### Override repair evidence
+
+On 29 October 2026, the regression failed against the reviewed head with a disabled-to-enabled ratio of 1.000984.
+The repair passes all 197 numerical cases in each of four isolated environment configurations.
+Unset and explicit 1 select the optimized d128 path. Explicit 0 and master opt 0 select the portable path.
+All 16 dispatch comparisons exceed 4x. The smallest observed ratio is 12.519x.
+The changed production translation unit compiles for sm60, sm61, and sm70.
+An override-bypass mutation fails the regression at 0.996622x.
+A production d128 dispatch deletion fails at 0.920076x.
+The restored unchanged production object passes the four-mode regression again.
+Scratch mutations never change the production worktree.
+The offline canonical record check and whitespace check pass.
+Evidence: `/tmp/attention-override-evidence`, with driver `/tmp/attention-override-build.py`.
+Independent review and the operator gate remain required before performance acceptance.
