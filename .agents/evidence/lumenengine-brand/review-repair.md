@@ -21,6 +21,14 @@ changed`. The repaired checker exited 0 on unchanged production commands.
 The historical output comes from the existing tracked evidence artifact.
 
 Mutation binaries and scratch headers were separate copies. No production
-artifact or header was modified. Full repaired packaging verification is PENDING
-until the operator-approved fast-forward makes the tests available at the
-existing build source path.
+artifact or header was modified. The operator authorized fast-forwarding the branding task branch to the repair.
+`python3 tests/branding/run_gate.py /tmp/lumen-brand-build` then exited 0:
+8 build-tree and 7 relocated installed tests passed. Both production command
+checks passed. The root build compiled all 4 independent header callers at
+`-j4`. Root CTest passed these 4 callers and the command checker, 5/5.
+See `repair-full-gate.log` and `repair-root.log` for exact commands and results.
+
+`python3 scripts/check-test-registration.py` and
+`python3 scripts/check-agent-record.py` exited 0. The full repository preflight
+started before edits and remains PENDING at handoff. Existing baseline failures
+remain documented in the owning report. No entire-preflight success is claimed.
