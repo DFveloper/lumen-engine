@@ -1,4 +1,10 @@
-# Using vllm.cpp
+# Using LumenEngine
+
+<a id="using-vllmcpp"></a>
+
+The `lumenengine-cli`, `lumenengine-server`, and `lumenengine-bench` aliases run
+the same implementations as their `vllm-` names. Existing commands, flags,
+environment variables, and configuration namespaces remain supported.
 
 The complete surface: the CLI, the OpenAI-compatible server, and the library
 (C ABI and C++). The [README](../README.md) carries the quickstart; this page is

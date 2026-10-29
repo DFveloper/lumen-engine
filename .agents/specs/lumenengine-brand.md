@@ -5,7 +5,7 @@ Issue: `ISSUE-LOCAL-01M63H60ES6WTJFPTMQBVSZWXY`
 
 ## Now
 
-SPIKE. User approved compatible branding on 29 October 2026. Base: `db1d71c9b7352a07983b408b2e755e853b4534f0`.
+ACTIVE. CPU packaging implementation is verified on 29 October 2026. Fresh review and the operator gate remain pending. User approved compatible branding on 29 October 2026. Base: `db1d71c9b7352a07983b408b2e755e853b4534f0`.
 
 ## Scope
 
@@ -17,7 +17,7 @@ This is original packaging and branding, not an upstream behavior port. Preserve
 
 ## Design and port map
 
-Keep the engine implementation and existing symbols. Update maintained README, build/usage/API documentation, product help and server identity text where user-facing. Introduce a forwarding `include/lumenengine.h` including `vllm.h`, CMake aliases `LumenEngine::LumenEngine` and `LumenEngine::shared`, and CLI aliases for existing shipped tools. Installed and build-tree consumers must both work. Do not rename CMake project variables or existing artifacts to simulate a rebrand. New names must reach the same implementations, rather than duplicate code.
+Keep the engine implementation and existing symbols. Update maintained README, build/usage/API documentation, product help and server identity text where user-facing. Introduce a forwarding `include/lumenengine.h` including `vllm.h`, CMake aliases `LumenEngine::LumenEngine` and `LumenEngine::shared` for the shared C ABI library in both build and install trees, and CLI aliases for existing shipped tools. Installed and build-tree consumers must both work. Do not rename CMake project variables or existing artifacts to simulate a rebrand. New names must reach the same implementations, rather than duplicate code.
 
 Keep existing version output and machine-consumed response formats compatible. Human-readable product descriptions may include the new name. Do not blindly replace `vllm` in model identifiers, upstream paths, test fixtures, configuration namespaces, function names, or source history. Do not erase original authorship or licenses. Avoid mass policy-document edits.
 
@@ -42,3 +42,37 @@ Do not change ABI versions or layouts for branding. Existing output consumed by 
 ## Integration
 
 Use one PR with this spec committed before implementation. Issue and exact evidence links are added before implementation begins. Evidence belongs in `.agents/evidence/lumenengine-brand/`.
+
+## Packaging decision
+
+Both LumenEngine targets select the shared C ABI library. This keeps build-tree and installed consumers consistent without exporting private static backend dependencies. Existing `vllm::vllm` remains the static build-tree target. A new `find_package(LumenEngine CONFIG)` package exposes the shared aliases and `vllm::shared`. The package preserves a target already defined by its caller.
+
+## Evidence
+
+See [the CPU packaging report](../evidence/lumenengine-brand/SUMMARY.md) for red-before tests, installed consumer results, command compatibility, mutations, and external limits. The issue remains open until landing.
+
+## Our baseline
+
+At `8408d5035`, `include/vllm.h` is the installed C ABI header and the only
+pinned public header. CMake defines `vllm::vllm` and `vllm::shared` for build
+consumers. It installs the libraries without a CMake package. The CLI, server,
+and benchmark retain their `vllm-` names and help identity.
+The red-before tests in the evidence report exercise these missing new names.
+
+## Port map
+
+| Surface | Local anchor | Change |
+|---|---|---|
+| Public header | `include/lumenengine.h` | Forward to unchanged `vllm.h` |
+| Build targets | `CMakeLists.txt` | Add shared C ABI aliases |
+| Installed targets | `cmake/LumenEngineConfig.cmake.in` | Add a relocatable package |
+| Command names | `examples/CMakeLists.txt` | Copy the existing executables |
+| Human help | CLI, benchmark, and server usage functions | Name LumenEngine |
+| Public header inventory | `scripts/check-surface-coverage.py` | Pin both installed headers |
+
+## Dependencies
+
+Use the existing C++20 compiler, C11 compiler, CMake, vendored headers, and
+Python standard library. This packaging work adds no runtime dependency.
+CPU verification disables optional diarization and network downloads.
+Native Windows and macOS runtime checks remain unavailable in this environment.

@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox syntax.
 
-**Goal:** Implement the approved compatible lumenengine branding design.
+**Goal:** Implement the approved compatible LumenEngine branding design.
 
 **Architecture:** Keep existing engine entry points and public interfaces. Add capability-gated implementation or additive aliases behind those entry points. Commit evidence and receive independent mutation review.
 
-**Tech Stack:** C++17, CMake, CUDA 12.4 where applicable, Python test harnesses.
+**Tech Stack:** C++20, CMake, CUDA 12.4 where applicable, Python test harnesses.
 
 **Spec:** `.agents/specs/lumenengine-brand.md`
 
@@ -26,10 +26,10 @@
 - Actual commands and model entry points must reach the implementation, beyond unit-level construction.
 - Unsupported arms and hardware-unverified results must be explicit.
 
-### Task 1: Implement and verify compatible lumenengine branding
+### Task 1: Implement and verify compatible LumenEngine branding
 
 **Files:**
-- Modify only the owning paths required by the spec: CMakeLists.txt, cmake/, include/lumenengine.h, examples/, docs/, README.md, tests/.
+- Modify only the owning paths required by the spec: CMakeLists.txt, cmake/, src/vllm/entrypoints/openai/server_main.cpp human help only, include/lumenengine.h, examples/, docs/, README.md, tests/.
 - Add focused production-entry-point tests and evidence under `.agents/evidence/lumenengine-brand/`.
 - Update the owning issue, spec, and exact matrix rows when their records change.
 
@@ -45,3 +45,5 @@
 - [ ] Run the spec's full scoped gate and repository preflight; distinguish proven baseline failures.
 - [ ] Commit implementation and dated evidence with the canonical issue reference and required trailers.
 - [ ] Return immutable head, changed files, red/green commands, mutation evidence, remaining external blockers, and scoped gate recipe for independent review.
+
+Packaging ruling: both LumenEngine targets select the shared C ABI library in both trees. Preserve the static `vllm::vllm` target.

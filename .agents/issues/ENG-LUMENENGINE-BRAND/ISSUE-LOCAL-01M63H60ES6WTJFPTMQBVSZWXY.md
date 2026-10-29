@@ -17,3 +17,7 @@ The product still uses vllm.cpp branding. Add LumenEngine names while preserving
 ## Resolution
 
 -
+
+## Evidence
+
+29 October 2026: additive header, shared CMake names, command aliases, and maintained product branding are implemented. [CPU packaging evidence](../../evidence/lumenengine-brand/SUMMARY.md) records real build-tree and relocated installed consumers, ABI smoke tests, and negative mutations. Fresh review and operator verification remain pending. Keep this issue open until the work lands.
