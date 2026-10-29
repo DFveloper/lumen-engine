@@ -180,3 +180,36 @@ This host gate supplements the public CUDA execution and real-model gates.
 ## Final local verification
 
 The complete Release build and final independent local gate pass at combined source `011dbdc97`. See [final verification](../evidence/pascal-volta-enable/final-verification/README.md). Published-checkpoint correctness and performance remain PENDING approved weights. P100 runtime and Volta runtime remain PENDING hardware. Volta optimization remains TODO. This evidence does not move the row to DONE or close its issues.
+
+## Llama GGUF adapter for the real-model gate
+
+`ISSUE-LOCAL-01M63VJCK05BTSAMDXVWT60E2T` records the public loader refusal for
+the approved SmolLM2-135M and TinyLlama-1.1B checkpoints. Implement an explicit
+Llama GGUF adapter into the existing registered Llama model and shared dense
+forward. Build a Llama HF-shaped config from the llama metadata prefix. Reuse
+the existing dense GGUF tensor ownership, quantized residency, merged QKV, and
+merged gate/up loader through a named shared helper. No Q/K norm is introduced.
+Undo the converter's Llama Q/K row permutation before the shared HF NeoX RoPE
+path. Preserve tied output detection and GQA geometry.
+
+Pinned source anchors: llama.cpp `62318cd57`, `conversion/llama.py:175-181,
+255-264` converts HF Q/K rows into interleaved GGUF order. The inverse maps
+HF row `a * D/2 + b` from GGUF row `2*b+a`, independently for each head.
+vLLM `a7c23ac96`, `vllm/model_executor/models/llama.py` owns the shared QKV,
+SwiGLU, RMSNorm, and HF RoPE behavior. The first-party GGUF plugin remains the
+primary GGUF reference where it executes. Pascal comparison uses the pinned
+llama.cpp secondary because the pinned vLLM excludes Pascal targets.
+
+Initial accepted GGUF geometry is the plain full-RoPE Llama family represented
+by the two approved checkpoints. Refuse scaling metadata and rope-frequency
+sidecars, Q/K norm tensors, and bias tensors with precise missing-arm messages,
+rather than silently accepting unimplemented semantics. These broader arms
+remain owed under this issue. Existing HF Llama and Qwen3 paths stay unchanged.
+
+The failing test enters through public `vllm_engine_load` and completion using
+the approved real artifacts. Add a focused deterministic adapter test for config,
+GQA, tied output, inverse Q/K rows, quantized ownership, and refusal cases.
+Mutation removes the production dispatch and separately the Q/K inverse and
+requires focused tests to fail. Build changed production translation units with
+the existing Release recipe. Run real-model public completion on P620 under the
+GPU lock, then let the operator run identical pinned-oracle token gates.
