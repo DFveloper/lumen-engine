@@ -122,6 +122,35 @@ executed them. See [Project status](../README.md#project-status) for what that l
 `.agents/specs/cuda-arch-ampere-fastpath.md` for the per-arch detail. Reports
 from those boards are welcome.
 
+### Pascal and Volta
+
+Use CUDA 12.4 and select `60` for P100, `61` for consumer Pascal, or `70`
+for Volta. CUDA 13 removes code generation for these targets.
+
+```sh
+cmake -S . -B build-legacy -G Ninja -DVLLM_CPP_CUDA=ON \
+  '-DVLLM_CPP_CUDA_ARCHITECTURES=60;61;70' -DVLLM_CPP_BUILD_TESTS=ON \
+  -DCMAKE_BUILD_TYPE=Release
+cmake --build build-legacy -j4
+flock "${GPU_LOCK:-$HOME/gpu.lock}" ctest --test-dir build-legacy \
+  -R '^test_cuda_(legacy_intrinsics|legacy_matmul|legacy_public|legacy_refusals|ops|quant_dot|backend)$' \
+  --output-on-failure
+```
+
+The `CUDA_LEGACY` attention descriptor selects the existing portable dense
+decoder path on sm_60, sm_61, and sm_70. It retains BF16 storage and uses FP32
+CUDA-core arithmetic. It does not advertise FP16 tensor-core optimization,
+MLA, sparse attention, attention sinks, or quantized KV cache.
+Pascal sm_61 retains native DP4A. P100 sm_60 uses exact byte products because
+that GPU lacks DP4A. Native EXL3 GEMM and fused EXL3 MoE refuse Pascal and Volta
+because their `m16n8k16` kernels require sm_80. Newer GPU feature selection stays
+unchanged.
+
+P620 operator results do not establish model parity or performance. P100 and
+Volta runtime validation remain pending. See the
+[legacy CUDA gate](../.agents/specs/pascal-volta-enable.md) for the measured
+scope and the checklist to run after Volta hardware arrives.
+
 ## Metal build (Apple Silicon)
 
 Metal is detected automatically on an Apple host with an ObjC++ compiler. The

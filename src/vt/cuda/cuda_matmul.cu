@@ -47,6 +47,8 @@
 #include <unordered_map>
 
 #include "vt/cuda/cublas_lt_hgemm.h"
+#include "cuda_device_caps.h"
+#include "cuda_legacy_matmul.cuh"
 #include "vt/cuda/fp8_plan_cache.h"
 #include "vt/cuda/gemm_algo_log.h"
 #include "vt/cuda/gemm_plan_cache.h"
@@ -641,6 +643,12 @@ void BatchedMatmulKernelCuda(Queue& q, Tensor& out, const Tensor& a, const Tenso
         }
       }
     }
+    return;
+  }
+
+  const auto& caps = GetDeviceCaps(q.device.index);
+  if (caps.valid && caps.sm_major < 8 && f32_in && out.dtype == DType::kBF16) {
+    CheckCuda(legacy::LaunchBatchedF32Bf16(q, out, a, b), "legacy batched f32 to bf16");
     return;
   }
 

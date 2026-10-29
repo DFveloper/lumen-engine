@@ -189,11 +189,11 @@ set(MLX_ROOT "" CACHE PATH "Root of an MLX install (include/ + lib/) for VLLM_CP
 #                 BUILD-supported and runtime-UNVERIFIED (no such board here).
 #                 sm_80 and sm_100a were compiled end to end `-Werror` 0-warn on
 #                 dgx as the per-major representatives; the same-major siblings
-#                 (86/87/89, 103a) share the identical portable bodies. sm_70
-#                 (Volta, dropped by nvcc 13) and sm_75 (Turing, no bf16 tensor
-#                 cores → the portable bf16-WMMA path will not compile) are NOT
-#                 build-supported — they need a real fp16/non-tensor-core kernel
-#                 body, a scoped follow-up. See backend-matrix.md
+#                 (86/87/89, 103a) share the identical portable bodies. CUDA 12.4
+#                 also builds the portable sm_60/61/70 paths; Pascal and Volta
+#                 code generation requires CUDA 12.x (removed in CUDA 13).
+#                 Legacy runtime and performance gates remain device-specific;
+#                 see pascal-volta-enable.md and backend-matrix.md.
 #                 BACKEND-CUDA-SM0{80,86,87,89}/SM10{0,3}/SM110 and §W10.
 # Cross-family fat lists use release-W1 per-source gencode: portable TUs receive
 # every requested target while feature TUs receive their exact feature-table
@@ -1315,6 +1315,7 @@ add_library(vllm STATIC
   src/vllm/platforms/cuda_arch_manifest.cpp
   src/vllm/platforms/cpu.cpp
   src/vllm/v1/attention/backend.cpp
+  src/vllm/v1/attention/cuda_legacy.cpp
   src/vllm/v1/attention/registry.cpp
   src/vllm/v1/attention/backends/utils.cpp
   src/vllm/v1/attention/backends/cpu_attn.cpp

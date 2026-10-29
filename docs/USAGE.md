@@ -28,6 +28,25 @@ example targets are named after the directories they are built from, so an
 in-source build makes the linker write each executable over its own source
 directory (issue #85).
 
+### Validate a legacy CUDA checkpoint
+
+The optional `test_cuda_legacy_capi` gate loads real GGUF weights through
+`include/vllm.h`. It requires CUDA and a file of little-endian int32 prompt
+IDs. It prints every generated token ID and the elapsed completion time.
+
+```sh
+flock "${GPU_LOCK:-$HOME/gpu.lock}" build-legacy/tests/test_cuda_legacy_capi \
+  /path/to/pinned-model.gguf /path/to/prompt.i32 16 3
+```
+
+The gate keeps one engine loaded across repetitions. It uses greedy sampling,
+ignores EOS, admits one sequence, and allocates 16 KV blocks of 16 tokens for
+a 256-token context. The command does not download weights. Record the exact
+checkpoint repository, revision, file size, and SHA256 with the results.
+Real-checkpoint correctness and comparative performance remain pending until
+an authorized artifact is supplied. Use the
+[legacy CUDA build recipe](BUILD.md#pascal-and-volta) before this command.
+
 ### One ROCm-specific behaviour
 
 ROCm builds register the full V1 sampler surface (temperature, top-k/top-p, min-p,

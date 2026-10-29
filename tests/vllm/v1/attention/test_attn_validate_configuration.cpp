@@ -495,3 +495,23 @@ TEST_CASE("block_size accepts any MULTIPLE of a declared size (hybrid blocks)") 
   CHECK_FALSE(rocm->supports_block_size(24));
   CHECK(rocm->supports_block_size(0));
 }
+
+TEST_CASE("legacy CUDA selects portable attention without changing FLASH_ATTN") {
+  for (const auto cap : {DeviceCapability{6, 0}, DeviceCapability{6, 1}, DeviceCapability{7, 0}}) {
+    FakeCudaPlatform platform(cap.major, cap.minor);
+    CHECK(SelectAttentionBackendName(platform, "", GateModelConfig()) == "CUDA_LEGACY");
+    CHECK_THROWS_AS(SelectAttentionBackendName(platform, "FLASH_ATTN", GateModelConfig()),
+                    std::invalid_argument);
+  }
+  const auto legacy = MakeAttentionBackend(DeviceType::kCUDA, "CUDA_LEGACY");
+  for (const auto cap : {DeviceCapability{5, 2}, DeviceCapability{6, 2}, DeviceCapability{7, 5}, DeviceCapability{8, 0}, DeviceCapability{12, 1}})
+    CHECK_FALSE(legacy->supports_compute_capability(cap));
+  for (const auto dtype : {DType::kF16, DType::kI8}) CHECK_FALSE(legacy->supports_dtype(dtype));
+  for (const auto dtype : {DType::kF32, DType::kBF16}) CHECK(legacy->supports_dtype(dtype));
+  for (const auto name : {"fp8", "float16"}) CHECK_FALSE(legacy->supports_kv_cache_dtype(name));
+  CHECK_FALSE(legacy->supports_attn_type("encoder"));
+  CHECK_FALSE(legacy->supports_sink());
+  CHECK_FALSE(legacy->is_mla());
+  CHECK_FALSE(legacy->is_sparse());
+  CHECK(legacy->get_kv_cache_shape(4, 16, 1, 64) == std::vector<int64_t>{4, 2, 16, 1, 64});
+}
