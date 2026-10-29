@@ -45,3 +45,21 @@ ACTIVE. Issue and spec precede the baseline edit. One PR follows recorded integr
 ## Owed
 
 Independent review, operator verification and landing remain required.
+
+## Implementation evidence
+
+On 2026-10-29, the existing 61-test suite failed 15 tests before the change
+and passed all 61 afterward. The command was
+`python3 tests/scripts/test_check_gate_commands.py`.
+`python3 scripts/check-gate-commands.py --check` passed.
+
+Deleting the new ID made
+`RatchetTests.test_the_baseline_matches_the_shipped_record` fail.
+Restoring the source byte-for-byte made that test pass.
+Removing the four added lines reproduces the complete script at 9f4b15d93
+byte-for-byte. Existing entries and classifier semantics are unchanged.
+
+`python3 scripts/check-agent-record.py` and `git diff --check` passed.
+Logs reside in `/tmp/lumen-gate-baseline-evidence`.
+The startup preflight ran for about 45 seconds before termination; it is
+incomplete. No GPU work ran. The issue stays open until landing.
