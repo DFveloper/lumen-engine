@@ -16,4 +16,9 @@ The legacy CUDA campaign activates SM060, SM061, and SM070 but omits their runna
 
 ## Resolution
 
--
+29 October 2026: the expected runnable inventory now includes all three shared-spec rows.
+The campaign record commit names SM060, SM061, and SM070, so the live audit can
+trace the unmerged work. Both focused suites pass. Each inventory-deletion
+mutation fails the existing exact-set assertion. Evidence:
+[record repair](../../evidence/pascal-volta-enable/record-repair.md).
+Independent review and landing remain pending.
