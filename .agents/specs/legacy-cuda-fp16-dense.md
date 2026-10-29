@@ -282,3 +282,13 @@ Keep the `OpProvider` layout, aggregate initialization, and existing signatures 
 Unregistered scalar capabilities remain false. Publish FP16 only for implemented CUDA scalar operations.
 Test selection with a higher priority provider that does not publish FP16.
 No device-name branch or global FP16 output admission belongs in the shared wrappers.
+
+## Wave 1 exact activation test reference, 30 October 2026
+
+The operator authorizes `tests/vt/cuda_fp16_scalar_reference.cu` and its test target source registration.
+Port the independent scalar SiLU computation from pinned vLLM `csrc/libtorch_stable/activation_kernels.cu:30-44,165-167`.
+Use CUDA `expf` on both sides to preserve the exact tolerance in `tests/kernels/core/test_activation.py:137-221`.
+The helper consumes test tensors only. It never calls a production operation or production scalar helper.
+Compare registered merged and split operation results with this independent reference at zero absolute and relative tolerance.
+Preserve the original FP16, BF16, and F32 shape matrix. Add a fixed half intermediate rounding fixture.
+A separate mutation removes the half intermediate rounding and must fail that fixture.
