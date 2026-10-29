@@ -16,4 +16,11 @@ Independent mutation review found head geometry, block geometry, KV connector re
 
 ## Resolution
 
--
+29 October 2026: add three registered-selector cases for geometry, storage,
+and unsupported request modes. The complete host suite passes 25 cases and
+148 assertions. Scratch predicate mutations fail the new checks. Evidence:
+`.agents/evidence/pascal-volta-enable/metadata-repair/`.
+
+The implementation is reviewable on the task branch. This issue stays OPEN
+until the change lands. Full CUDA integration and real-model gates remain
+separate obligations.
