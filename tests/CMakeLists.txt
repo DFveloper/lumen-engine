@@ -3543,6 +3543,7 @@ target_include_directories(test_ops_quant_repack PRIVATE ${CMAKE_SOURCE_DIR}/src
 # CUDA device. Reaches src/ for vt/cpu block/quant headers used by the reference.
 vllm_cpp_add_test(test_cuda_quant_dot vt/test_cuda_quant_dot.cpp)
 target_include_directories(test_cuda_quant_dot PRIVATE ${CMAKE_SOURCE_DIR}/src)
+vllm_cpp_add_test(test_cuda_pascal_q6_prefill vt/test_cuda_pascal_q6_prefill.cpp)
 # KGATHER: the CUDA DEQUANTIZING GATHER. `vt::Embedding` over a block-quantized
 # table on the device, gated BIT-EXACTLY against the CPU arm (itself gated
 # against the pinned llama.cpp on real shipped bytes) across every encoding

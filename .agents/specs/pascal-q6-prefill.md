@@ -79,3 +79,32 @@ Stop for a required ABI change or edits outside the declared scope.
 ## Owed
 
 Independent review, actual checkpoint correctness, and performance acceptance remain required.
+
+## Candidate evidence
+
+Shared packer commits 9fb365e29 and 361613b0f were committed before this implementation.
+This branch imports them as a25bce7ca and 57e7dadb1.
+The independent registered-operation actual-input regression failed all 48 values before implementation.
+The largest error was 0.197464, compared with the calculated accumulation bound 1.49427e-5.
+The candidate passes 3 focused cases and 165510 assertions, including the actual checkpoint fixture and M8 control.
+The bounded full quant suite passes 20 cases and 255005 assertions.
+Its Q6_K eligible-prefill expected values use independent D4 reconstruction. Its tolerances and unquantized F64 band remain unchanged.
+The changed production translation unit compiles for sm60, sm61, and sm70.
+A production dispatch removal fails 39225 assertions.
+Narrowing activation D4 scales to F16 fails 39782 assertions.
+The actual SmolLM p16g16 gate still emits token357 at index8 instead of oracle5649 across two repetitions.
+Model correctness remains FAILING. No performance acceptance is claimed.
+Evidence lives under /tmp/pascal-q6-prefill-evidence.
+
+### Actual TinyLlama regression
+
+The operator additionally found a new TinyLlama p16g16 mismatch with the combined prefill candidate.
+The candidate emits token1736 at index12 instead of oracle338 across two repetitions.
+The decode-only control remains token-exact. Log: /tmp/lumen-tiny-q6prefill-candidate.log.
+TinyLlama and SmolLM actual-model gates are both FAILING.
+Acceptance stops at this new model mismatch. Keep the numerical slice reviewable while fresh diagnosis determines the executing format difference.
+Do not update goldens, exclude TinyLlama, or generalize the implementation before that diagnosis.
+
+The packed subscale index mutation fails 55083 assertions.
+Restoring the unchanged candidate object passes all 3 focused cases and 165510 assertions again.
+The production worktree remains unchanged during each scratch mutation.

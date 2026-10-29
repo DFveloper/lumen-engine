@@ -290,6 +290,38 @@ bool PascalQ6Oracle(DType dtype, int64_t m) {
 #endif
 }
 
+bool PascalQ6PrefillOracle(DType dtype, int64_t m) {
+#ifdef VLLM_CPP_CUDA
+  cudaDeviceProp prop{};
+  REQUIRE(cudaGetDeviceProperties(&prop, 0) == cudaSuccess);
+  return prop.major == 6 && prop.minor >= 1 && prop.sharedMemPerBlock >= 48 * 1024 &&
+         dtype == DType::kQ6_K && m > 8;
+#else
+  return false;
+#endif
+}
+
+void Q6D4Oracle(std::vector<float>& result, const std::vector<float>& a,
+                 const std::vector<uint8_t>& wq, int64_t m, int64_t n, int64_t k) {
+  std::vector<float> decoded(n * k), reconstructed(k);
+  vt::cpu::BlockToFloat(DType::kQ6_K)(wq.data(), decoded.data(), n * k);
+  for (int64_t r = 0; r < m; ++r) {
+    for (int64_t b = 0; b < k / 32; ++b) {
+      float amax = 0;
+      for (int j = 0; j < 32; ++j) amax = std::max(amax, std::abs(a[r * k + b * 32 + j]));
+      const float inverse = amax == 0 ? 0 : 127.0f / amax;
+      const float d = inverse == 0 ? 0 : 1.0f / inverse;
+      for (int j = 0; j < 32; ++j)
+        reconstructed[b * 32 + j] = std::round(a[r * k + b * 32 + j] * inverse) * d;
+    }
+    for (int64_t c = 0; c < n; ++c) {
+      double sum = 0;
+      for (int64_t j = 0; j < k; ++j) sum += double(decoded[c * k + j]) * reconstructed[j];
+      result[r * n + c] = static_cast<float>(sum);
+    }
+  }
+}
+
 void Q6GpuOracle(std::vector<float>& result, const std::vector<float>& a,
                  const std::vector<uint8_t>& wq, int64_t n, int64_t k) {
   std::vector<float> decoded(n * k), reconstructed(k);
@@ -386,6 +418,7 @@ TEST_CASE("CUDA keep-quant GEMM == CPU reference and f64 dequant (Q8_K family + 
         if (PascalQ5Oracle(c.dtype, m))
           Q5GpuOracle(cpu_out, a, wq, n, k / c.block_elems);
         if (PascalQ6Oracle(c.dtype, m)) Q6GpuOracle(cpu_out, a, wq, n, k);
+        if (PascalQ6PrefillOracle(c.dtype, m)) Q6D4Oracle(cpu_out, a, wq, m, n, k);
 
 
         // --- CUDA path (device tensors, unified pool) -------------------------
