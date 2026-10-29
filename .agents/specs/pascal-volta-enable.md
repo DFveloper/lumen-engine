@@ -180,3 +180,13 @@ This host gate supplements the public CUDA execution and real-model gates.
 ## Final local verification
 
 The complete Release build and final independent local gate pass at combined source `011dbdc97`. See [final verification](../evidence/pascal-volta-enable/final-verification/README.md). Published-checkpoint correctness and performance remain PENDING approved weights. P100 runtime and Volta runtime remain PENDING hardware. Volta optimization remains TODO. This evidence does not move the row to DONE or close its issues.
+
+## Quantized dense projection shards
+
+`ISSUE-LOCAL-01M63VRMM7HCJJ1MN1QSEVT88E` owns the dense projection representation gap exposed by the real Llama GGUF gate. Keep each Q, K, V, gate, and up shard in its original block encoding. The published TinyLlama artifact has Q4_K Q/K and Q6_K V. SmolLM2 has Q5_0 Q/K and Q8_0 V. A homogeneous merged tensor cannot represent either group.
+
+Append optional `qkv_proj_parts` and `gate_up_proj_parts` owners to the shared dense weight container. Empty parts preserve every existing path. The Llama GGUF adapter alone populates the new parts. The adapter owns inverse Q/K row permutations, moving whole packed rows rather than decoding blocks.
+
+Add a dense realization of `vt::MergedGemmGroup` with contiguous per-shard products. Route each contraction through `vt::MatmulBT`, which already selects registered quantized operators by weight dtype. QKV has arity 3 and no epilogue. Gate/up has arity 2 and the existing split SwiGLU epilogue. A new `MlpGateUpMethodBase` method owns the gate/up products and BF16 activation boundary. The existing attention block consumes Q/K/V products. Do not add a parallel model forward or GPU-specific model branch.
+
+Pinned llama.cpp `62318cd57` executes original quantized matrices through `llama_model_loader` and the `GGML_OP_MUL_MAT` CUDA chain. The existing shared `MatmulBTQuant` implementation already ports those block-dot semantics. This slice changes representation and wiring, not quant arithmetic. Test heterogeneous shard products and gate/up equivalence through the methods, then require the Llama public real-model gate to reach the parts. Deleting the production parts call must fail its focused regression. Compare stored bytes and dtypes with the checkpoint. Full real-model correctness and performance remain open until measured.
