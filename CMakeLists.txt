@@ -1123,6 +1123,7 @@ add_library(vllm STATIC
   src/vllm/model_executor/models/decision_scorer.cpp
   src/vllm/model_executor/models/nimble_inference.cpp
   src/vllm/model_executor/models/nimble_registry.cpp
+  src/vllm/model_executor/models/llama_gguf_weights.cpp
   src/vllm/model_executor/models/llama_weights.cpp
   src/vllm/model_executor/models/mistral_registry.cpp
   src/vllm/model_executor/models/mistral_weights.cpp
