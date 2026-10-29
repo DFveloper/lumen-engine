@@ -54,3 +54,18 @@ or oracle execution remains explicitly pending, never green.
 
 ACTIVE. Root cause identified; spec precedes implementation. Independent review
 and operator full-model gates remain required. No main merge or remote write.
+
+## Explicit d128 override repair
+
+Issue: ISSUE-LOCAL-01M63ZPB4JB2634AYK6XN4S6EH.
+Independent review found that the Pascal ternary bypasses DecodeD128Enabled.
+An explicit VT_ATTN_DECODE_D128=0 therefore retains the optimized kernel.
+Keep Pascal's unset default enabled. Let the existing helper resolve explicit values before hardware alignment decides eligibility.
+Keep other architectures' unset default disabled. The master VT_ATTN_DECODE_OPT=0 still disables all optimized decode.
+
+First add a production-path override regression using the registered attention benchmark.
+Require unset and explicit 1 to select the fast path, and explicit 0 and master 0 to select the portable path.
+The same executable checks numerical correctness in each mode.
+A dispatch deletion and an override bypass must fail the regression.
+Compile the repair for sm60, sm61, and sm70, and rerun the existing 197 numerical cases.
+Performance acceptance remains pending fresh review and the operator gate.
