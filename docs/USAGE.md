@@ -1598,3 +1598,25 @@ ordinary reading. So read any single `rel(sumabs)` ratio as an order of
 magnitude, and confirm a real divergence with `head_dmax` or the sign-sensitive
 `rel_proj` column. Worked example and evidence:
 [`docs/bench-evidence/qwen4exp-layerfp-2999-20260923.md`](bench-evidence/qwen4exp-layerfp-2999-20260923.md).
+
+## Pascal Llama GGUF validation artifacts
+
+The `llama` GGUF source feeds the existing `LlamaForCausalLM` model registry.
+Packed quantized Q/K/V and gate/up projections retain their separate source
+encodings through the shared merged-GEMM seam. Q/K row inversion changes row
+order and preserves every packed block. No Q/K normalization is introduced.
+The plain full-RoPE arm accepts these reproducible validation checkpoints:
+
+| Arm | HuggingFace repository and revision | File | Size in bytes | SHA256 |
+|---|---|---|---:|---|
+| Q4_K_M mixed k-quants | `bartowski/SmolLM2-135M-Instruct-GGUF` @ `09816acd5d99df7be770d85ea30822623dab342c` | `SmolLM2-135M-Instruct-Q4_K_M.gguf` | 105454432 | `2e8040ceae7815abe0dcb3540b9995eaa1fa0d2ca9e797d0a635ae4433c68c2d` |
+| Q4_K_M mixed k-quants | `TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF` @ `52e7645ba7c309695bec7ac98f4f005b139cf465` | `tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf` | 668788096 | `9fecc3b3cd76bba89d504f29b616eedf7da85b96540e490ca5824d3f7d2776a0` |
+
+Artifact hashes are verified. Real-checkpoint correctness and performance gates
+remain pending their recorded execution results. Artifact size does not prove
+that runtime weights, activations, and KV cache fit a device.
+
+Scaled or partial GGUF RoPE, rope-frequency sidecars, attention biases, Q/K
+normalization variants, and asymmetric value heads are refused with a message
+that names the missing part. Those GGUF arms remain owed under
+`ISSUE-LOCAL-01M63VJCK05BTSAMDXVWT60E2T`. Existing HF Llama loading is unchanged.

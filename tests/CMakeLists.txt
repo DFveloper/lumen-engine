@@ -1137,6 +1137,8 @@ target_include_directories(test_laguna_gguf_load PRIVATE ${CMAKE_SOURCE_DIR}/src
 
 # The qwen3 GGUF loader (`Qwen3HfConfigFromGguf`, `LoadQwen3FromGguf`). Synthetic
 # GGUF via gguf_builder.h; no model file needed. Needs tests/vllm for gguf_builder.h.
+vllm_cpp_add_test(test_llama_gguf_weights vllm/models/test_llama_gguf_weights.cpp)
+target_include_directories(test_llama_gguf_weights PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vllm)
 vllm_cpp_add_test(test_qwen3_gguf_weights vllm/models/test_qwen3_gguf_weights.cpp)
 target_include_directories(test_qwen3_gguf_weights PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vllm)
 
