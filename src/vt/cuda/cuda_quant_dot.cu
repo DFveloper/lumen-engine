@@ -2522,6 +2522,8 @@ void MatmulQ8_0GroupedCuda(Tensor& out, const Tensor& act_t, const Tensor& weigh
   CheckCuda(cudaGetLastError(), "matmul_bt_quant_grouped Q8_0 launch");
 }
 
+#include "cuda_pascal_q5_decode.cuh"
+
 // The kCUDA provider for OpId::kMatmulBTQuant. Validation already done by
 // vt::MatmulBTQuant (ops.cpp) before dispatch; this mirrors the CPU kernel's
 // contract: b is [N,K] block-quant, a is [M,K] f32/bf16 (row-packed), out [M,N].
@@ -2551,6 +2553,11 @@ void MatmulBTQuantKernelCuda(Queue& q, Tensor& out, const Tensor& a,
       throw std::runtime_error(
           "vt cuda: matmul_bt_quant: K must be a multiple of 32 on the 32-block keep-quant lane");
     const int64_t nb32 = k / kQK8_0;
+    if (b.dtype == DType::kQ5_0 && m == 1 && IsPascalQ5Decode()) {
+      LaunchPascalQ5Decode(out, a, b, n, nb32, s);
+      CheckCuda(cudaGetLastError(), "Pascal Q5_0 decode launch");
+      return;
+    }
     const BlockQ8_0* qact = Ensure32BlockAct(a, m, nb32, s);
     const uint8_t* w32b = static_cast<const uint8_t*>(b.data);
 #define VT_KQ32_DENSE(WV) LaunchGemm32<WV>(out, w32b, qact, m, n, nb32, s)

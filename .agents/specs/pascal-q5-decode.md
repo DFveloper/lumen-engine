@@ -44,3 +44,16 @@ Stop for a required public ABI change or evidence that the intended device scope
 ## Owed
 
 Full model correctness and performance acceptance remain with the operator.
+
+## Candidate evidence
+
+On 29 October 2026, the original-sum regression failed at -22.0459 against -22.2344 before implementation.
+The candidate and the restored production route return -22.2344.
+Replacing the quant translation unit with its base version reproduces the same failure.
+The focused suite passes 19 cases and 254599 assertions with the large GLM MoE geometry excluded.
+The full suite fails that geometry because cudaMalloc exceeds the P620 2 GiB memory.
+The subsequent original-sum case then observes the CUDA allocation error.
+The changed translation unit compiles for sm60, sm61, and sm70.
+The operator actual SmolLM gate still differs at generated token 8, so model correctness remains FAILING.
+These results establish an operation correction, not model parity or performance acceptance.
+Logs live under `/tmp/pascal-q5` for this session.
