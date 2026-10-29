@@ -1,12 +1,17 @@
 // Llama GGUF adapter regression: pinned llama.cpp 62318cd57 conversion/llama.py:175-181.
 #include <doctest/doctest.h>
 #include <cstring>
+#include <array>
+#include <cmath>
+#include <memory>
+#include "vllm.h"
 #include "gguf_builder.h"
 #include "vllm/model_executor/models/llama_gguf_weights.h"
 using namespace gguf_test;
 namespace {
-std::string Model(bool tied, bool scaled = false, bool qnorm = false, bool quant = false, std::string refusal = "") {
+std::string Model(bool tied, bool scaled = false, bool qnorm = false, bool quant = false, std::string refusal = "", bool public_quant_head = false) {
   const int h=quant?32:16;
+  const int vocab=public_quant_head?64:32;
   GgufModelBuilder b;
   b.AddKv(StrKv("general.architecture", "llama"));
   for (auto [key,value] : std::vector<std::pair<std::string,uint32_t>>{
@@ -18,7 +23,7 @@ std::string Model(bool tied, bool scaled = false, bool qnorm = false, bool quant
   if(scaled) b.AddKv(StrKv("llama.rope.scaling.type","linear"));
   if(refusal=="partial") b.AddKv(U32Kv("llama.attention.value_length",3));
   auto add=[&](std::string name,int rows,int cols,float base=0.F) {
-    const bool projection = quant && (name.find("attn_q.weight")!=std::string::npos ||
+    const bool projection = quant && ((public_quant_head && name == "output.weight") || name.find("attn_q.weight")!=std::string::npos ||
         name.find("attn_k.weight")!=std::string::npos || name.find("attn_v.weight")!=std::string::npos ||
         name.find("ffn_gate.weight")!=std::string::npos || name.find("ffn_up.weight")!=std::string::npos);
     if(projection) {
@@ -39,8 +44,8 @@ std::string Model(bool tied, bool scaled = false, bool qnorm = false, bool quant
     b.AddTensor(name,cols==1?std::vector<uint64_t>{static_cast<uint64_t>(rows)}:
                 std::vector<uint64_t>{static_cast<uint64_t>(cols),static_cast<uint64_t>(rows)},0,data);
   };
-  add("token_embd.weight",32,h); add("output_norm.weight",h,1);
-  if(!tied) add("output.weight",32,h);
+  add("token_embd.weight",vocab,h); add("output_norm.weight",h,1);
+  if(!tied) add("output.weight",vocab,h);
   add("blk.0.attn_norm.weight",h,1);add("blk.0.ffn_norm.weight",h,1);
   add("blk.0.attn_q.weight",h,h,0);add("blk.0.attn_k.weight",h/2,h,32);
   add("blk.0.attn_v.weight",h/2,h,64);add("blk.0.attn_output.weight",h,h);
@@ -49,6 +54,18 @@ std::string Model(bool tied, bool scaled = false, bool qnorm = false, bool quant
   if(qnorm)add("blk.0.attn_q_norm.weight",h/2,1);
   if(refusal=="bias")add("blk.0.attn_q.bias",h,1);
   if(refusal=="rope")add("rope_freqs.weight",h/4,1);
+  if (public_quant_head) {
+    b.AddKv(StrKv("tokenizer.ggml.model", "gpt2"));
+    b.AddKv(StrKv("tokenizer.ggml.pre", "qwen2"));
+    b.AddKv(U32Kv("tokenizer.ggml.bos_token_id", 1));
+    b.AddKv(U32Kv("tokenizer.ggml.eos_token_id", 2));
+    b.AddKv(BoolKv("tokenizer.ggml.add_bos_token", false));
+    std::vector<std::string> tokens;
+    for (int id=0; id<vocab; ++id) tokens.push_back("token"+std::to_string(id));
+    b.AddKv(StrArrayKv("tokenizer.ggml.tokens", tokens));
+    b.AddKv(StrArrayKv("tokenizer.ggml.merges", {}));
+    b.AddKv(I32ArrayKv("tokenizer.ggml.token_type", std::vector<int32_t>(vocab, 1)));
+  }
   return b.Build();
 }
 }
@@ -112,4 +129,52 @@ TEST_CASE("Llama GGUF refuses bias, sidecar RoPE, and asymmetric value heads") {
     TempFile f(Model(false,false,false,false,name));auto g=vllm::GgufFile::Open(f.path());
     CHECK_THROWS_AS(vllm::LlamaHfConfigFromGguf(g),std::runtime_error);
   }
+}
+
+
+TEST_CASE("Llama untied quantized GGUF head completes through the public API") {
+  TempFile file(Model(false, false, false, true, "", true));
+  auto gguf = vllm::GgufFile::Open(file.path());
+  auto config = vllm::LlamaHfConfigFromGguf(gguf);
+  vllm::GgufLoadPolicy policy;
+  policy.keep_quant = true;
+  policy.expand_nk = true;
+  auto weights = vllm::LoadLlamaFromGguf(gguf, config, &policy);
+  REQUIRE(weights.lm_head.nk);
+  REQUIRE(weights.lm_head.dtype == vt::DType::kQ4_0);
+  REQUIRE(weights.lm_head.shape[0] == 64);
+  REQUIRE(weights.lm_head.shape[1] == 32);
+  auto params = vllm_model_params_default();
+  params.model_path = file.path().c_str();
+  params.device = 1;
+  params.max_model_len = 64;
+  params.max_num_seqs = 1;
+  params.block_size = 16;
+  params.num_blocks = 32;
+  vllm_engine* raw = nullptr;
+  const auto loaded = vllm_engine_load(&params, &raw);
+  const std::string load_error = vllm_last_error();
+  REQUIRE_MESSAGE(loaded == VLLM_OK, load_error);
+  std::unique_ptr<vllm_engine, decltype(&vllm_engine_free)> engine(raw, vllm_engine_free);
+  struct Capture { int calls=0; bool finite=true; } capture;
+  auto sampling = vllm_sampling_params_default();
+  sampling.temperature = 0;
+  sampling.ignore_eos = 1;
+  sampling.max_tokens = 4;
+  sampling.logits_processor = [](const int32_t*, int32_t, float* logits, int32_t vocab, void* ctx) {
+    auto& value = *static_cast<Capture*>(ctx);
+    value.finite = value.finite && vocab == 64;
+    for (int32_t i=0; i<vocab; ++i) value.finite = value.finite && std::isfinite(logits[i]);
+    ++value.calls;
+  };
+  sampling.logits_processor_user_data = &capture;
+  const int32_t prompt[] = {1, 5, 9};
+  int32_t output[4]{};
+  int32_t count = 0;
+  const auto status = vllm_complete_tokens(engine.get(), prompt, 3, &sampling, output, 4, &count, nullptr);
+  const std::string completion_error = vllm_last_error();
+  REQUIRE_MESSAGE(status == VLLM_OK, completion_error);
+  CHECK(count == 4);
+  CHECK(capture.calls == 4);
+  CHECK(capture.finite);
 }
