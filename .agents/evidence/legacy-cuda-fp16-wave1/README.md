@@ -86,7 +86,13 @@ All six changed CUDA translation units compile for sm60, sm61, and sm70.
 The two SiLU translation units also compile for sm80 and sm90. Compilation is not hardware runtime evidence.
 Two DFlash citations in `.agents/kernel-matrix.md` move with `cuda_ops.cu`.
 The rows are KERNEL-ATTN-DFLASH-BLOCK and KERNEL-ATTN-DFLASH-PAGED-BLOCK. Unrelated rows remain byte-identical.
-Independent mutation review and the final preflight remain PENDING.
+The original independent review found a test-matrix gap and stale comment.
+The scoped repair review passes at `4c416296c`, resolving both findings.
+The operator rerun passes 14 cases and 3428 assertions. Full preflight is not green:
+the original run was interrupted before compilation; the unchanged standalone
+checker completes with 44 of 829 compilation failures. See the
+[final gate disposition](final-gates/README.md) for exact failures, later integrated
+record fixes, retained review reports, source hashes and unresolved model gates.
 
 ## Implementer mutation evidence
 
