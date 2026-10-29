@@ -176,3 +176,7 @@ Keep legacy capability, dtype, attention mode, and newer GPU controls.
 Compile the complete host selector suite and mutate each claimed metadata
 predicate in scratch objects. Require each mutation to fail the focused test.
 This host gate supplements the public CUDA execution and real-model gates.
+
+## Final local verification
+
+The complete Release build and final independent local gate pass at combined source `011dbdc97`. See [final verification](../evidence/pascal-volta-enable/final-verification/README.md). Published-checkpoint correctness and performance remain PENDING approved weights. P100 runtime and Volta runtime remain PENDING hardware. Volta optimization remains TODO. This evidence does not move the row to DONE or close its issues.
