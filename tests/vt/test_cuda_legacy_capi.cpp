@@ -42,7 +42,7 @@ int main(int argc, char** argv) {
     if (prompt.size() + static_cast<size_t>(generated) > 256)
       throw std::runtime_error("prompt and completion exceed the 256-token gate context");
     model.block_size = 16;
-    model.num_blocks = 16;
+    model.num_blocks = 32;  // Include the allocator's reserved null block.
     model.kv_cache_memory_bytes = 0;
     vllm_engine* raw = nullptr;
     if (vllm_engine_load(&model, &raw) != VLLM_OK) throw std::runtime_error(vllm_last_error());
