@@ -236,7 +236,12 @@ __device__ __forceinline__ float ApplySoftcap(float s, float softcap) {
   if (softcap <= 0.0f) return s;
   float y;
   const float x = s / softcap;
+#if __CUDA_ARCH__ >= 750
   asm("tanh.approx.f32 %0, %1;" : "=f"(y) : "f"(x));
+#else
+  // llama.cpp fattn-vec.cuh:277 @ 62318cd57 uses libdevice tanhf here.
+  y = tanhf(x);
+#endif
   return softcap * y;
 }
 
@@ -806,11 +811,15 @@ __global__ void PagedFlashKernel(Tout* out, const TQ* query, const TKV* k_cache,
 //   paged cache; S = Q·Kᵀ (WMMA, f32 acc) → per-row online softmax (f32,
 //   causal-masked) → P bf16 → O += P·V (WMMA, acc = rescaled running O).
 // ===========================================================================
+// Pascal has no WMMA namespace, and Volta has no BF16 fragments.
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
 namespace attn_wmma = nvcuda::wmma;
+#endif
 constexpr int kWmmaM = 16;        // WMMA tile M=N=K
 constexpr int kWmmaBN = 64;       // keys per K/V tile (multiple of 16)
 constexpr int kWmmaWarps = 8;     // warps per block
 
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
 using AccFrag = attn_wmma::fragment<attn_wmma::accumulator, kWmmaM, kWmmaM, kWmmaM, float>;
 using ArowFrag =
     attn_wmma::fragment<attn_wmma::matrix_a, kWmmaM, kWmmaM, kWmmaM, __nv_bfloat16, attn_wmma::row_major>;
@@ -818,6 +827,7 @@ using BcolFrag =
     attn_wmma::fragment<attn_wmma::matrix_b, kWmmaM, kWmmaM, kWmmaM, __nv_bfloat16, attn_wmma::col_major>;
 using BrowFrag =
     attn_wmma::fragment<attn_wmma::matrix_b, kWmmaM, kWmmaM, kWmmaM, __nv_bfloat16, attn_wmma::row_major>;
+#endif
 
 template <typename TQ, typename TKV, typename Tout, bool HasWindow>
 __global__ void PagedFlashWmmaKernel(Tout* out, const TQ* query, const TKV* k_cache,

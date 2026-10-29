@@ -39,6 +39,7 @@
 // — correct, host-speed, and NOT graph-capturable. DotMXFP4 has its device math
 // ready and the 32-block lane is the seam it needs; owed, not box-deferred.
 #include <cuda_runtime.h>
+#include "cuda_legacy_intrinsics.cuh"
 
 #include <cstdint>
 #include <cstdlib>
@@ -417,8 +418,8 @@ __device__ inline float DotIQ2XXS(const BlockIQ2_XXS* xb, const BlockQ8_K* yb) {
       const int shi = __vcmpne4(static_cast<int>(sbc & 0x80402010u), 0);  // bytes 4-7
       const int glo = __vsub4(static_cast<int>(grid[0]) ^ slo, slo);  // ±grid bytes 0-3
       const int ghi = __vsub4(static_cast<int>(grid[1]) ^ shi, shi);  // ±grid bytes 4-7
-      sumi = __dp4a(glo, *reinterpret_cast<const int*>(q8 + 0), sumi);
-      sumi = __dp4a(ghi, *reinterpret_cast<const int*>(q8 + 4), sumi);
+      sumi = LegacyDp4a(glo, *reinterpret_cast<const int*>(q8 + 0), sumi);
+      sumi = LegacyDp4a(ghi, *reinterpret_cast<const int*>(q8 + 4), sumi);
       q8 += 8;
     }
     bsum += sumi * static_cast<int32_t>(ls);
@@ -733,12 +734,12 @@ __device__ inline float DotQ2K(const BlockQ2_K* xb, const BlockQ8_K* yb) {
       int sl = 0, sh = 0;
       for (int l = 0; l < 16; l += 4) {
         const int v = (*reinterpret_cast<const int*>(q2k + l) >> shift) & 0x03030303;
-        sl = __dp4a(v, *reinterpret_cast<const int*>(q8k + j * 32 + l), sl);
+        sl = LegacyDp4a(v, *reinterpret_cast<const int*>(q8k + j * 32 + l), sl);
       }
       isum += (sc[is++] & 0xF) * sl;
       for (int l = 16; l < 32; l += 4) {
         const int v = (*reinterpret_cast<const int*>(q2k + l) >> shift) & 0x03030303;
-        sh = __dp4a(v, *reinterpret_cast<const int*>(q8k + j * 32 + l), sh);
+        sh = LegacyDp4a(v, *reinterpret_cast<const int*>(q8k + j * 32 + l), sh);
       }
       isum += (sc[is++] & 0xF) * sh;
       shift += 2;
@@ -828,7 +829,7 @@ __device__ inline float DotQ4K(const BlockQ4_K* xb, const BlockQ8_K* yb) {
     int sub = 0;
     for (int l = 0; l < 32; l += 4) {
       const int v = (*reinterpret_cast<const int*>(q4b + l) >> shift) & 0x0F0F0F0F;
-      sub = __dp4a(v, *reinterpret_cast<const int*>(q8b + l), sub);
+      sub = LegacyDp4a(v, *reinterpret_cast<const int*>(q8b + l), sub);
     }
     isum += scale * sub;
   }
@@ -870,7 +871,7 @@ __device__ inline float DotQ5K(const BlockQ5_K* xb, const BlockQ8_K* yb) {
     for (int l = 0; l < 32; l += 4) {
       const int lo = (*reinterpret_cast<const int*>(q4b + l) >> shift) & 0x0F0F0F0F;
       const int hi = ((*reinterpret_cast<const int*>(hm + l) >> sb) & 0x01010101) << 4;
-      sub = __dp4a(lo | hi, *reinterpret_cast<const int*>(q8b + l), sub);
+      sub = LegacyDp4a(lo | hi, *reinterpret_cast<const int*>(q8b + l), sub);
     }
     isum += scale * sub;
   }
@@ -1326,7 +1327,7 @@ __global__ void QuantDotGemmQ8_0Kernel(OutT* __restrict__ out,
     const BlockQ8_0* ab = a_row + b;
     int sumi = 0;
 #pragma unroll
-    for (int k = 0; k < kQK8_0 / 4; ++k) sumi = __dp4a(GetIntB2(wb->qs, k), GetIntB2(ab->qs, k), sumi);
+    for (int k = 0; k < kQK8_0 / 4; ++k) sumi = LegacyDp4a(GetIntB2(wb->qs, k), GetIntB2(ab->qs, k), sumi);
     partial += sumi * (DF16ToF32(wb->d) * DF16ToF32(ab->d));
   }
 #pragma unroll
@@ -1378,7 +1379,7 @@ __global__ void QuantDotGemmQ8_0MultiRowKernel(OutT* __restrict__ out,
                                                                             sizeof(BlockQ8_0));
       int sumi = 0;
 #pragma unroll
-      for (int k = 0; k < kQK8_0 / 4; ++k) sumi = __dp4a(GetIntB2(wb->qs, k), GetIntB2(ab->qs, k), sumi);
+      for (int k = 0; k < kQK8_0 / 4; ++k) sumi = LegacyDp4a(GetIntB2(wb->qs, k), GetIntB2(ab->qs, k), sumi);
       partial[r] += sumi * (DF16ToF32(wb->d) * ad);
     }
   }
@@ -1460,7 +1461,7 @@ __global__ void QuantDotGemmQ8_0PrefetchKernel(OutT* __restrict__ out,
       if (!ok[p]) continue;
       int sumi = 0;
 #pragma unroll
-      for (int k = 0; k < kI32; ++k) sumi = __dp4a(wq[p][k], aq[p][k], sumi);
+      for (int k = 0; k < kI32; ++k) sumi = LegacyDp4a(wq[p][k], aq[p][k], sumi);
       partial += sumi * sc[p];
     }
   }
@@ -1508,7 +1509,7 @@ __global__ void QuantDotGemmQ8_0PairKernel(OutT* __restrict__ out0, OutT* __rest
                                                                             sizeof(BlockQ8_0));
       int sumi = 0;
 #pragma unroll
-      for (int k = 0; k < kQK8_0 / 4; ++k) sumi = __dp4a(GetIntB2(wb->qs, k), GetIntB2(ab->qs, k), sumi);
+      for (int k = 0; k < kQK8_0 / 4; ++k) sumi = LegacyDp4a(GetIntB2(wb->qs, k), GetIntB2(ab->qs, k), sumi);
       p0 += sumi * (DF16ToF32(wb->d) * ad);
     }
     if (has1) {
@@ -1516,7 +1517,7 @@ __global__ void QuantDotGemmQ8_0PairKernel(OutT* __restrict__ out0, OutT* __rest
                                                                             sizeof(BlockQ8_0));
       int sumi = 0;
 #pragma unroll
-      for (int k = 0; k < kQK8_0 / 4; ++k) sumi = __dp4a(GetIntB2(wb->qs, k), GetIntB2(ab->qs, k), sumi);
+      for (int k = 0; k < kQK8_0 / 4; ++k) sumi = LegacyDp4a(GetIntB2(wb->qs, k), GetIntB2(ab->qs, k), sumi);
       p1 += sumi * (DF16ToF32(wb->d) * ad);
     }
   }
@@ -1567,7 +1568,7 @@ __global__ void QuantDotGemmQ8_0GroupDiagKernel(OutT* __restrict__ out,
     const BlockQ8_0* ab = a_row + b;
     int sumi = 0;
 #pragma unroll
-    for (int k = 0; k < kQK8_0 / 4; ++k) sumi = __dp4a(GetIntB2(wb->qs, k), GetIntB2(ab->qs, k), sumi);
+    for (int k = 0; k < kQK8_0 / 4; ++k) sumi = LegacyDp4a(GetIntB2(wb->qs, k), GetIntB2(ab->qs, k), sumi);
     partial += sumi * (DF16ToF32(wb->d) * DF16ToF32(ab->d));
   }
 #pragma unroll
@@ -1623,7 +1624,7 @@ __global__ void QuantDotGemmQ8_0SubwarpKernel(OutT* __restrict__ out,
     const BlockQ8_0* ab = a_row + b;
     int sumi = 0;
 #pragma unroll
-    for (int k = 0; k < kQK8_0 / 4; ++k) sumi = __dp4a(GetIntB2(wb->qs, k), GetIntB2(ab->qs, k), sumi);
+    for (int k = 0; k < kQK8_0 / 4; ++k) sumi = LegacyDp4a(GetIntB2(wb->qs, k), GetIntB2(ab->qs, k), sumi);
     partial += sumi * (DF16ToF32(wb->d) * DF16ToF32(ab->d));
   }
   const unsigned mask = SubwarpMask<LANES>(threadIdx.x);
@@ -1686,14 +1687,14 @@ __global__ void QuantDotGemmQ8_0AlignedKernel(OutT* __restrict__ out,
     const int4 w1 = wq[1];
     const int8_t* aq = a_row[b].qs;
     int sumi = 0;
-    sumi = __dp4a(w0.x, GetIntB2(aq, 0), sumi);
-    sumi = __dp4a(w0.y, GetIntB2(aq, 1), sumi);
-    sumi = __dp4a(w0.z, GetIntB2(aq, 2), sumi);
-    sumi = __dp4a(w0.w, GetIntB2(aq, 3), sumi);
-    sumi = __dp4a(w1.x, GetIntB2(aq, 4), sumi);
-    sumi = __dp4a(w1.y, GetIntB2(aq, 5), sumi);
-    sumi = __dp4a(w1.z, GetIntB2(aq, 6), sumi);
-    sumi = __dp4a(w1.w, GetIntB2(aq, 7), sumi);
+    sumi = LegacyDp4a(w0.x, GetIntB2(aq, 0), sumi);
+    sumi = LegacyDp4a(w0.y, GetIntB2(aq, 1), sumi);
+    sumi = LegacyDp4a(w0.z, GetIntB2(aq, 2), sumi);
+    sumi = LegacyDp4a(w0.w, GetIntB2(aq, 3), sumi);
+    sumi = LegacyDp4a(w1.x, GetIntB2(aq, 4), sumi);
+    sumi = LegacyDp4a(w1.y, GetIntB2(aq, 5), sumi);
+    sumi = LegacyDp4a(w1.z, GetIntB2(aq, 6), sumi);
+    sumi = LegacyDp4a(w1.w, GetIntB2(aq, 7), sumi);
     partial += sumi * (DF16ToF32(d_base[gi]) * DF16ToF32(a_row[b].d));
   }
 #pragma unroll
@@ -1727,7 +1728,7 @@ __global__ void QuantDotGemmGroupedQ8_0Kernel(OutT* __restrict__ out,
     const BlockQ8_0* ab = a_row + b;
     int sumi = 0;  // Brick 3: 8×__dp4a over GetIntB2 (see QuantDotGemmQ8_0Kernel) — bit-identical
 #pragma unroll
-    for (int k = 0; k < kQK8_0 / 4; ++k) sumi = __dp4a(GetIntB2(wb->qs, k), GetIntB2(ab->qs, k), sumi);
+    for (int k = 0; k < kQK8_0 / 4; ++k) sumi = LegacyDp4a(GetIntB2(wb->qs, k), GetIntB2(ab->qs, k), sumi);
     partial += sumi * (DF16ToF32(wb->d) * DF16ToF32(ab->d));
   }
 #pragma unroll
@@ -1766,7 +1767,7 @@ __global__ void QuantDotGemmGroupedQ8_0SubwarpKernel(OutT* __restrict__ out,
     const BlockQ8_0* ab = a_row + b;
     int sumi = 0;
 #pragma unroll
-    for (int k = 0; k < kQK8_0 / 4; ++k) sumi = __dp4a(GetIntB2(wb->qs, k), GetIntB2(ab->qs, k), sumi);
+    for (int k = 0; k < kQK8_0 / 4; ++k) sumi = LegacyDp4a(GetIntB2(wb->qs, k), GetIntB2(ab->qs, k), sumi);
     partial += sumi * (DF16ToF32(wb->d) * DF16ToF32(ab->d));
   }
   const unsigned mask = SubwarpMask<LANES>(threadIdx.x);

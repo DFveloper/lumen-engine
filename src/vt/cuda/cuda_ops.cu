@@ -679,7 +679,13 @@ __global__ void SiluAndMulKernel(Tout* out, const Tin* x, int64_t n, int64_t d) 
     const int64_t j = idx - i * d;
     const float gate = Load(x, i * 2 * d + j);
     const float up = Load(x, i * 2 * d + d + j);
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 750
+    // vLLM a7c23ac96d csrc/libtorch_stable/activation_kernels.cu:165-167
+    // returns input scalar_t before compute():44 multiplies by up.
+    const float silu = static_cast<float>(static_cast<Tin>(gate / (1.0f + expf(-gate))));
+#else
     const float silu = gate / (1.0f + expf(-gate));
+#endif
     Store(out, idx, silu * up);
   }
 }
@@ -2541,7 +2547,7 @@ __global__ void DFlashAttnChunkKernel(Tout* out, const Tin* query, const Tin* ke
 // and it is why this path is gated at a bf16 tolerance rather than the f32 path's
 // 2e-5. f32 inputs therefore stay on DFlashAttnChunkKernel, whose f32 tolerance
 // this could not hold.
-__device__ __forceinline__ void MmaBf16M16N8K16(float* c, const unsigned* a, const unsigned* b) {
+[[maybe_unused]] __device__ __forceinline__ void MmaBf16M16N8K16(float* c, const unsigned* a, const unsigned* b) {
 #if __CUDA_ARCH__ >= 800
   asm volatile(
       "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 "

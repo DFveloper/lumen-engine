@@ -6,7 +6,7 @@
 
 **Architecture:** Keep existing engine entry points and public interfaces. Add capability-gated implementation or additive aliases behind those entry points. Commit evidence and receive independent mutation review.
 
-**Tech Stack:** C++17, CMake, CUDA 12.4 where applicable, Python test harnesses.
+**Tech Stack:** C++20, CMake, CUDA 12.4 where applicable, Python test harnesses.
 
 **Spec:** `.agents/specs/pascal-volta-enable.md`
 
@@ -29,7 +29,7 @@
 ### Task 1: Implement and verify pascal and volta cuda enablement
 
 **Files:**
-- Modify only the owning paths required by the spec: cmake/CudaArchFeatures.cmake, src/vt/cuda/, tests/vt/, docs/BUILD.md, docs/FEATURES.md, docs/USAGE.md.
+- Modify only the owning paths required by the spec: cmake/CudaArchFeatures.cmake, src/vt/cuda/, tests/vt/, tests/CMakeLists.txt, docs/BUILD.md, docs/FEATURES.md, docs/USAGE.md.
 - Add focused production-entry-point tests and evidence under `.agents/evidence/pascal-volta-enable/`.
 - Update the owning issue, spec, and exact matrix rows when their records change.
 
