@@ -305,6 +305,7 @@ TEST_CASE("CUDA FP16 scalar dense Matmul and MatmulBT preserve orientation strid
 
 TEST_CASE("CUDA FP16 scalar cached RoPE ports upstream conventions optional keys and head strides") {
   Session s;
+  for (auto dtype:{DType::kF32, DType::kBF16, DType::kF16})
   for (int maxpos:{11, 4096, 32768})
   for (bool neox:{false, true})
   for (int head:{32, 108})
@@ -313,19 +314,19 @@ TEST_CASE("CUDA FP16 scalar cached RoPE ports upstream conventions optional keys
   for (bool padded:{false, true}) {
     const int stride = head+(padded?64:0), heads = 7;
     auto x = Random(size_t(tokens)*heads*stride);
-    for (auto& z:x)z = Round(z, DType::kF16);
+    for (auto& z:x)z = Round(z, dtype);
     std::vector<float> cache(size_t(maxpos)*32);
     for (int p = 0; p<maxpos; ++p)
   for (int j = 0; j<16; ++j) {
       double angle = p*std::pow(10000., -2.*j/32);
-      cache[p*32+j] = Round(float(std::cos(angle)), DType::kF16);
-      cache[p*32+16+j] = Round(float(std::sin(angle)), DType::kF16);
+      cache[p*32+j] = Round(float(std::cos(angle)), dtype);
+      cache[p*32+16+j] = Round(float(std::sin(angle)), dtype);
     }
     std::vector<int64_t> pos(tokens);
     std::mt19937 rng(0);
     for (auto& p:pos)p = rng()%maxpos;
-    auto xp = Pack(x, DType::kF16), cp = Pack(cache, DType::kF16);
-    Buffer q(s, DType::kF16, {tokens, heads, stride}, xp.data()), k(s, DType::kF16, {tokens, heads, stride}, xp.data()), c(s, DType::kF16, {maxpos, 32}, cp.data()), p(s, DType::kI64, {tokens}, pos.data());
+    auto xp = Pack(x, dtype), cp = Pack(cache, dtype);
+    Buffer q(s, dtype, {tokens, heads, stride}, xp.data()), k(s, dtype, {tokens, heads, stride}, xp.data()), c(s, dtype, {maxpos, 32}, cp.data()), p(s, DType::kI64, {tokens}, pos.data());
     q.t.shape[2] = head;
     k.t.shape[2] = head;
     RopeArgs args;
@@ -339,13 +340,34 @@ TEST_CASE("CUDA FP16 scalar cached RoPE ports upstream conventions optional keys
       size_t off = (size_t(t)*heads+h)*stride;
       int a = neox?j:2*j, b = neox?j+16:2*j+1;
       float co = cache[pos[t]*32+j], si = cache[pos[t]*32+16+j];
-      want[off+a] = Round(std::fma(-x[off+b], si, x[off+a]*co), DType::kF16);
-      want[off+b] = Round(std::fma(x[off+a], si, x[off+b]*co), DType::kF16);
+      want[off+a] = Round(std::fma(-x[off+b], si, x[off+a]*co), dtype);
+      want[off+b] = Round(std::fma(x[off+a], si, x[off+b]*co), dtype);
     }
     q.t.shape[2] = stride;
     k.t.shape[2] = stride;
     Close(q.read(), want, 1e-3f, 1e-3f);
     Close(k.read(), key?want:x, 1e-3f, 1e-3f);
+    if (padded) {
+      // Upstream also flattens the sliced head axes in this stride variant.
+      // Materialize its logical values, then reshape to the rank-3 VT ABI.
+      std::vector<float> flat_x(size_t(tokens)*heads*head), flat_want(flat_x.size());
+      for (int t = 0; t<tokens; ++t)
+      for (int h = 0; h<heads; ++h)
+      for (int j = 0; j<head; ++j) {
+        const size_t dst = (size_t(t)*heads+h)*head+j;
+        const size_t src = (size_t(t)*heads+h)*stride+j;
+        flat_x[dst] = x[src];
+        flat_want[dst] = want[src];
+      }
+      auto flat_packed = Pack(flat_x, dtype);
+      Buffer flat_q(s, dtype, {tokens, heads*head}, flat_packed.data()),
+             flat_k(s, dtype, {tokens, heads*head}, flat_packed.data());
+      auto q_view = flat_q.t.View({tokens, heads, head});
+      auto k_view = flat_k.t.View({tokens, heads, head});
+      RopeFromCache(s.q, q_view, key?&k_view:nullptr, p.t, c.t, args);
+      Close(flat_q.read(), flat_want, 1e-3f, 1e-3f);
+      Close(flat_k.read(), key?flat_want:flat_x, 1e-3f, 1e-3f);
+    }
   }
 }
 
