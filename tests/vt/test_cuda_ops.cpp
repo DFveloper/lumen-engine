@@ -582,17 +582,17 @@ TEST_CASE("CUDA matmul_bt (cuBLASLt TN) matches CPU on odd sizes") {
   }
 }
 
-TEST_CASE("CUDA matmul: unsupported dtype combo (f16 inputs) throws naming it") {
+TEST_CASE("CUDA matmul: unsupported mixed f16 and bf16 inputs throw naming them") {
   if (!HasCuda()) {
     MESSAGE("no CUDA backend registered; skipping");
     return;
   }
   Backend& gpu = vt::GetBackend(DeviceType::kCUDA);
   QueueGuard gq(gpu);
-  // The op-level validation admits f16 inputs; the cuBLASLt kernel does not
-  // implement them and must throw before touching the data (left unset).
+  // Shared validation admits both float inputs. The kernel refuses their mixed
+  // formats before touching the data, which remains unset.
   DeviceTensor da(gpu, gq.q, DType::kF16, {4, 8});
-  DeviceTensor db(gpu, gq.q, DType::kF16, {8, 3});
+  DeviceTensor db(gpu, gq.q, DType::kBF16, {8, 3});
   DeviceTensor dout(gpu, gq.q, DType::kF32, {4, 3});
   bool threw = false;
   try {
@@ -603,6 +603,7 @@ TEST_CASE("CUDA matmul: unsupported dtype combo (f16 inputs) throws naming it") 
     CAPTURE(msg);
     CHECK(msg.find("matmul") != std::string::npos);
     CHECK(msg.find("f16") != std::string::npos);
+    CHECK(msg.find("bf16") != std::string::npos);
   }
   CHECK(threw);
   CHECK_NOTHROW(gpu.Synchronize(gq.q));
