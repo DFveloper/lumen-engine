@@ -379,6 +379,8 @@ __device__ inline void LoadRow8(const float* p, int64_t base, int lane, float r[
 template <int EPL, typename T>
 __device__ inline void LoadRowN(const T* p, int64_t base, int lane, float* r);
 
+#include "cuda_paged_attn_legacy.cuh"
+
 template <>
 __device__ inline void LoadRowN<8, __nv_bfloat16>(const __nv_bfloat16* p, int64_t base, int lane,
                                                   float* r) {
@@ -2134,12 +2136,32 @@ void LaunchDecode(cudaStream_t s, Tensor& out, const Tensor& query, const Tensor
                   int64_t hq, int64_t d, int64_t num_reqs, int64_t num_kv_heads,
                   int64_t block_size) {
   const dim3 grid(static_cast<unsigned>(num_tokens), static_cast<unsigned>(hq));
+  // Pascal d64 uses the same register online-softmax kernel as d128.
+  // A single cross-warp barrier replaces the portable kernel's barriers/key.
+  if (DecodeOptEnabled() && LegacyRegisterDecodeEnabled() && d == 64 &&
+      LegacyDecodeRowsAligned<TQ, TKV>(query, k_cache, v_cache, 2)) {
+    const size_t shmem = (static_cast<size_t>(kDecWarps) * d + 2 * kDecWarps) * sizeof(float);
+    auto* kernel = args.window_size.has_value()
+                       ? PagedAttentionDecodeOptKernel<TQ, TKV, Tout, true, 2>
+                       : PagedAttentionDecodeOptKernel<TQ, TKV, Tout, false, 2>;
+    kernel<<<grid, kDecWarps * 32, shmem, s>>>(
+        out.Ptr<Tout>(), query.Ptr<TQ>(), k_cache.Ptr<TKV>(), v_cache.Ptr<TKV>(),
+        block_table.Ptr<int32_t>(), seq_lens.Ptr<int32_t>(), query_start_loc.Ptr<int32_t>(),
+        num_reqs, hq, num_kv_heads, d, block_size, block_table.stride[0], block_table.stride[1],
+        k_cache.stride[0], k_cache.stride[1], k_cache.stride[2], v_cache.stride[0],
+        v_cache.stride[1], v_cache.stride[2], args.scale, args.logits_soft_cap, args.causal,
+        WindowLeft(args), WindowRight(args));
+    Check(cudaGetLastError(), "paged_attention legacy decode-d64 launch");
+    return;
+  }
   // head_dim 128 (EPL=4), opt-in. No GQA carve-out: PagedAttentionDecodeGqaKernel
   // sits inside the `d == 32 * kDecEpl` (256) branch below, so at head_dim 128 it
   // can never run, and excluding qpk == kDecGqaQG here would strand exactly those
   // models (e.g. Qwen3-32B, hq/num_kv_heads == 8) on the generic block kernel this
   // arm exists to replace.
-  if (DecodeOptEnabled() && DecodeD128Enabled() && d == 32 * 4) {
+  if (DecodeOptEnabled() && (LegacyRegisterDecodeEnabled()
+                                 ? LegacyDecodeRowsAligned<TQ, TKV>(query, k_cache, v_cache, 4)
+                                 : DecodeD128Enabled()) && d == 32 * 4) {
     const int block = kDecWarps * 32;
     const size_t shmem = (static_cast<size_t>(kDecWarps) * d + 2 * kDecWarps) * sizeof(float);
     auto* k4 = args.window_size.has_value()
