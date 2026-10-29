@@ -163,3 +163,16 @@ logits, equal greedy tokens, and no CPU reference fallback. Reverting the tile
 selection must reproduce the public completion failure. Real-checkpoint gates
 remain separate and pending. Full sm_60/61/70 build and operator verification
 remain required after this repair is integrated.
+
+## Legacy metadata regression repair
+
+`ISSUE-LOCAL-01M63NZRF5VEMZHJ9F3NQM27FF` records five mutation gaps in the
+registered `CUDA_LEGACY` metadata tests. Keep production predicates unchanged.
+Exercise valid head dimensions 8 through 256 and refuse nonpositive, unaligned,
+and oversized dimensions through the production selector. Pin block multiples
+of 16, the inherited zero-as-unspecified rule, explicit auto and bfloat16 KV
+acceptance, KV connector refusal, and invalid cache block allocation refusal.
+Keep legacy capability, dtype, attention mode, and newer GPU controls.
+Compile the complete host selector suite and mutate each claimed metadata
+predicate in scratch objects. Require each mutation to fail the focused test.
+This host gate supplements the public CUDA execution and real-model gates.
