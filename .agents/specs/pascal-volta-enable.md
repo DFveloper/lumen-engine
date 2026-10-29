@@ -127,3 +127,15 @@ and refuse host reference fallback. Delete the legacy priority or registrar in
 a scratch build and require public load to reproduce the refusal. Host tests
 pin exact allowed capabilities and unsupported modes, and preserve sm_80+
 selection. This supplements, and never substitutes for, published-model gates.
+
+## Gate record reconciliation
+
+The shared spec supplies runnable gates for `BACKEND-CUDA-SM060`,
+`BACKEND-CUDA-SM061`, and `BACKEND-CUDA-SM070`. The exact runnable inventory
+must include all three rows after their transition to `ACTIVE`. Keep the
+classifier and its exact-set assertion unchanged. A campaign record commit
+names each related row so the live audit can identify the same unmerged work.
+This provenance records shared sm_60, sm_61, and sm_70 build work. It does not
+claim P100 or Volta runtime validation, or real-checkpoint performance.
+
+Repair issue: `ISSUE-LOCAL-01M63NAHP61SNGD5ZBQM9BGCA8`.
