@@ -863,3 +863,26 @@ TEST_CASE("PermuteVHeads: CUDA reproduces the CPU gather bit-exactly") {
 
   CheckSameAs(gpu_out, want, "cuda");
 }
+
+TEST_CASE("CUDA legacy split SwiGLU narrows the activated BF16 gate before multiply") {
+  if (!HasCuda()) return;
+  auto& gpu = vt::GetBackend(DeviceType::kCUDA);
+  if (gpu.DeviceCapabilityMajor() > 7 ||
+      (gpu.DeviceCapabilityMajor() == 7 && gpu.DeviceCapabilityMinor() >= 5)) return;
+  constexpr int64_t width = 256;
+  const auto gate_bytes = Pack(RandomF32(width, 214), DType::kBF16);
+  const auto up_bytes = Pack(RandomF32(width, 713), DType::kBF16);
+  std::vector<float> expected(width), actual(width);
+  Queue cpu{Cpu(), nullptr};
+  Tensor gate = MakeTensor(const_cast<uint8_t*>(gate_bytes.data()), DType::kBF16, Cpu(), {1, width});
+  Tensor up = MakeTensor(const_cast<uint8_t*>(up_bytes.data()), DType::kBF16, Cpu(), {1, width});
+  Tensor out = MakeTensor(expected.data(), DType::kF32, Cpu(), {1, width});
+  vt::MoeSiluMul(cpu, out, gate, up);
+  QueueGuard gq(gpu);
+  DeviceTensor dg(gpu, gq.q, DType::kBF16, {1, width}, gate_bytes.data());
+  DeviceTensor du(gpu, gq.q, DType::kBF16, {1, width}, up_bytes.data());
+  DeviceTensor dout(gpu, gq.q, DType::kF32, {1, width});
+  vt::MoeSiluMul(gq.q, dout.tensor(), dg.tensor(), du.tensor());
+  dout.Download(gq.q, actual.data());
+  CheckClose(actual, expected, 1e-6f, 1e-6f);
+}
