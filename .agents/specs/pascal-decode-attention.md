@@ -84,3 +84,17 @@ Scratch mutations never change the production worktree.
 The offline canonical record check and whitespace check pass.
 Evidence: `/tmp/attention-override-evidence`, with driver `/tmp/attention-override-build.py`.
 Independent review and the operator gate remain required before performance acceptance.
+
+## Prepared real-model A/B evidence
+
+Issue: `ISSUE-LOCAL-01M63YBNVGEYMHETJ67HE5XS2K`.
+[Measured TinyLlama A/B](../evidence/pascal-volta-enable/attention/model-ab/README.md)
+records the executed pre-quant-correction binary at attention source `22d433baf`.
+The same binary passes all32 cold/warm completions,1280 exact generated IDs,
+with warm throughput ratios1.0276/1.0834/1.1590/1.2834 across the four axes.
+Peak memory is equal within each pair. The whole idle-start campaign holds
+one GPU file mutex. Later d128 repair `c93e92b94` leaves d64 unchanged.
+These prior results do not validate later Q5/Q6/D4 quant candidates. Current
+Smol parity and the later Q6-prefill Tiny regression remain FAIL. Lifecycle
+and final operator gates remain unchanged. This evidence rides the capability
+integration; it is not a benchmark publication or a new standalone feature.
