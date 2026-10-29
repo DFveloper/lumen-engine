@@ -2085,7 +2085,8 @@ bool DecodeGqaEnabled() {
 // the decode-opt kernel entirely on the `d == 32 * kDecEpl` (256) gate and falls
 // to the generic block kernel.
 //
-// DEFAULT OFF, opt in with VT_ATTN_DECODE_D128=1. It is correctness-complete but
+// Default off outside Pascal. Set VT_ATTN_DECODE_D128=1 to opt in.
+// It is correctness-complete but
 // NOT byte-exact against the block kernel it replaces: the two reduce the KV
 // sequence in a different ORDER (warp-strided online softmax vs the block
 // kernel's per-tile loop), so a greedy anchor can move at an exact bf16 tie.
@@ -2093,12 +2094,12 @@ bool DecodeGqaEnabled() {
 // FA2 decode GQA group-swap landed (gated OFF, correctness-complete) before it
 // was flipped ON against the full gate. The flip is a separate change and owes
 // the near-tie razor + distributional gate + regen under the ratified-tie rule.
-bool DecodeD128Enabled() {
-  static const bool enabled = [] {
+bool DecodeD128Enabled(bool default_enabled) {
+  static const int setting = [] {
     const char* e = std::getenv("VT_ATTN_DECODE_D128");
-    return e != nullptr && e[0] == '1';
+    return e == nullptr ? -1 : static_cast<int>(e[0] == '1');
   }();
-  return enabled;
+  return setting == -1 ? default_enabled : setting != 0;
 }
 
 // --- Launchers -------------------------------------------------------------
@@ -2159,9 +2160,9 @@ void LaunchDecode(cudaStream_t s, Tensor& out, const Tensor& query, const Tensor
   // can never run, and excluding qpk == kDecGqaQG here would strand exactly those
   // models (e.g. Qwen3-32B, hq/num_kv_heads == 8) on the generic block kernel this
   // arm exists to replace.
-  if (DecodeOptEnabled() && (LegacyRegisterDecodeEnabled()
-                                 ? LegacyDecodeRowsAligned<TQ, TKV>(query, k_cache, v_cache, 4)
-                                 : DecodeD128Enabled()) && d == 32 * 4) {
+  if (DecodeOptEnabled() && DecodeD128Enabled(LegacyRegisterDecodeEnabled()) &&
+      (!LegacyRegisterDecodeEnabled() ||
+       LegacyDecodeRowsAligned<TQ, TKV>(query, k_cache, v_cache, 4)) && d == 32 * 4) {
     const int block = kDecWarps * 32;
     const size_t shmem = (static_cast<size_t>(kDecWarps) * d + 2 * kDecWarps) * sizeof(float);
     auto* k4 = args.window_size.has_value()
