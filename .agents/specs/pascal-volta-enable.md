@@ -180,3 +180,19 @@ This host gate supplements the public CUDA execution and real-model gates.
 ## Final local verification
 
 The complete Release build and final independent local gate pass at combined source `011dbdc97`. See [final verification](../evidence/pascal-volta-enable/final-verification/README.md). Published-checkpoint correctness and performance remain PENDING approved weights. P100 runtime and Volta runtime remain PENDING hardware. Volta optimization remains TODO. This evidence does not move the row to DONE or close its issues.
+
+## Published GGUF tokenizer repair
+
+Issue: `ISSUE-LOCAL-01M63W5W3MTWY1KXRRD77FBG5D`.
+The approved SmolLM2 checkpoint carries `smollm`; TinyLlama carries the `llama`
+SentencePiece family. Load both through the existing tokenizer surface. Pin
+llama.cpp `62318cd57` `src/llama-vocab.cpp:111-246,362-371,2097-2107,2564-2595,3579-3633`.
+SmolLM isolates each Unicode number before the existing GPT-2 pretokenizer.
+SentencePiece uses score-ranked adjacent merges, highest score then leftmost,
+with UTF-8 symbols and byte fallback after merging. Reuse existing metaspace
+and special-token surfaces, retaining SPM prefix and raw-byte decode semantics.
+Honor GGUF BOS/EOS metadata for `EncodeWithSpecialTokens`; `Encode` adds none.
+Test synthetic score order, whitespace, byte fallback, special tokens, malformed
+metadata, and digit splitting. Compare actual checkpoint encode/decode against
+the pinned oracle. Mutate each new production branch and require failure.
+No model forward, quantization, or CUDA kernel changes belong to this repair.
