@@ -135,11 +135,15 @@ DBuf MlpBlock(Dev d, const Qwen3DenseMlpWeights& w, const HfConfig& cfg,
   // QUANT-EXL3 (#2181): the scheme is chosen ONCE from the populated weights,
   // by the same factory shape the fp4 arm uses. Exactly one of {bf16, fp4,
   // exl3} is populated per layer.
-  auto gate_up =
-      w.IsExl3() ? layers::MakeMlpGateUpMethod(w.gate_up_proj, w.gate_proj_exl3,
+  std::unique_ptr<layers::MlpGateUpMethodBase> gate_up;
+  if (!w.gate_up_proj_parts.empty()) {
+    gate_up = std::make_unique<layers::DenseShardMlpGateUpMethod>(&w.gate_up_proj_parts, I);
+  } else {
+    gate_up = w.IsExl3() ? layers::MakeMlpGateUpMethod(w.gate_up_proj, w.gate_proj_exl3,
                                                w.up_proj_exl3, I)
                  : layers::MakeMlpGateUpMethod(w.gate_up_proj, w.gate_proj_fp4,
                                                w.up_proj_fp4, I);
+  }
   DBuf act = gate_up->Apply(d, dh2);
   auto down = w.IsExl3() ? layers::MakeLinearMethod(w.down_proj, w.down_proj_exl3)
                          : layers::MakeLinearMethod(w.down_proj, w.down_proj_fp4);
