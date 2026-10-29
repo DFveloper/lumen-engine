@@ -3181,6 +3181,11 @@ vllm_cpp_add_test(test_cuda_backend vt/test_cuda_backend.cpp)
 vllm_cpp_add_test(test_dropin_abi vt/test_dropin_abi.cpp)
 target_include_directories(test_dropin_abi PRIVATE ${CMAKE_SOURCE_DIR}/src)
 vllm_cpp_add_test(test_cuda_ops vt/test_cuda_ops.cpp)
+if(VLLM_CPP_CUDA)
+  vllm_cpp_add_test(test_cuda_fp16_scalar
+    vt/test_cuda_fp16_scalar.cpp
+    vt/cuda_fp16_scalar_reference.cu)
+endif()
 # Legacy operator and public-ABI checkpoint gates.
 if(VLLM_CPP_CUDA)
   add_executable(test_cuda_legacy_matmul vt/test_cuda_legacy_matmul.cpp)

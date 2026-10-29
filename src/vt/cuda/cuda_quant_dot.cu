@@ -39,6 +39,7 @@
 // — correct, host-speed, and NOT graph-capturable. DotMXFP4 has its device math
 // ready and the 32-block lane is the seam it needs; owed, not box-deferred.
 #include <cuda_runtime.h>
+#include <cuda_fp16.h>
 #include "cuda_legacy_intrinsics.cuh"
 
 #include <cstdint>
@@ -185,6 +186,11 @@ __device__ inline float DLoadAct(const void* base, ActDT dt, int64_t idx) {
 // DEFINED by cuda_quant_iq_tables.cuh -- a second including TU is a duplicate
 // symbol, not a second copy. It opens no namespace of its own.
 #include "vt/cuda/cuda_quant_dequant.cuh"
+
+// FP16 gather output is distinct from the existing uint16_t BF16 carrier.
+template <> struct DqStore<__half> {
+  __device__ static void Set(__half* p, int64_t i, float v) { p[i] = __float2half_rn(v); }
+};
 
 // The block geometry the decoders hard-code, tied to the SINGLE source of block
 // layout (cpu_quant_blocks.h, itself static_asserted against ggml-common.h). A
@@ -3065,6 +3071,12 @@ cudaError_t LaunchEmbeddingQuant(cudaStream_t s, Tensor& out, const Tensor& tabl
     return LaunchEmbeddingQuantTyped<float, int64_t>(
         s, static_cast<float*>(out.data), tbl, static_cast<const int64_t*>(ids.data),
         table.dtype, t, nb, h, v, row_bytes, err);
+  }
+  if (out.dtype == DType::kF16) {
+    if (ids.dtype == DType::kI32) return LaunchEmbeddingQuantTyped<__half, int32_t>(
+        s, out.Ptr<__half>(), tbl, ids.Ptr<int32_t>(), table.dtype, t, nb, h, v, row_bytes, err);
+    return LaunchEmbeddingQuantTyped<__half, int64_t>(
+        s, out.Ptr<__half>(), tbl, ids.Ptr<int64_t>(), table.dtype, t, nb, h, v, row_bytes, err);
   }
   if (ids.dtype == DType::kI32) {
     return LaunchEmbeddingQuantTyped<uint16_t, int32_t>(
