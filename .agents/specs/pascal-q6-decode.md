@@ -42,3 +42,14 @@ Stop for a required ABI change or a change outside the declared hardware and dec
 ## Owed
 
 Full model correctness, GPU tracing, and performance acceptance remain with the operator.
+
+## Candidate evidence
+
+The registered-operation regression failed all 21 value comparisons before implementation.
+The candidate passes those comparisons across K=256, 1536, and 2048 with N=7.
+The changed translation unit compiles for sm60, sm61, and sm70.
+The bounded quant suite passes 20 cases and 254813 assertions.
+The excluded GLM MoE geometry exceeds the P620 memory, as recorded by the preceding Q5_0 full-suite run.
+The actual production candidate is /tmp/pascal-q5/q6-actual.
+The archive contains no original quant translation unit, so registration reaches the candidate object.
+Actual model correctness remains PENDING the operator gate.

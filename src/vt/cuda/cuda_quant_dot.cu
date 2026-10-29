@@ -2523,6 +2523,7 @@ void MatmulQ8_0GroupedCuda(Tensor& out, const Tensor& act_t, const Tensor& weigh
 }
 
 #include "cuda_pascal_q5_decode.cuh"
+#include "cuda_pascal_q6_decode.cuh"
 
 // The kCUDA provider for OpId::kMatmulBTQuant. Validation already done by
 // vt::MatmulBTQuant (ops.cpp) before dispatch; this mirrors the CPU kernel's
@@ -2588,6 +2589,12 @@ void MatmulBTQuantKernelCuda(Queue& q, Tensor& out, const Tensor& a,
         "Q8_K super-blocks");
   }
   const int64_t nsb = k / kQK_K;
+  if (b.dtype == DType::kQ6_K && m == 1 && IsPascalQ5Decode()) {
+    LaunchPascalQ6Decode(out, a, b, n, nsb, s);
+    CheckCuda(cudaGetLastError(), "Pascal Q6_K decode launch");
+    return;
+  }
+
   const size_t w_block_bytes = static_cast<size_t>(BlockBytes(b.dtype));
   const size_t w_row_bytes = static_cast<size_t>(nsb) * w_block_bytes;
 
