@@ -16,4 +16,9 @@ Independent mutations remove dense descriptor guards without failing existing li
 
 ## Resolution
 
--
+29 October 2026: three malformed-input cases pin the dense descriptor guards.
+The complete host suite passes 13 cases and 107 assertions. All four guard
+removal mutations fail with intended exception assertions. Evidence is in
+`.agents/evidence/pascal-volta-enable/quant-contract-repair/`.
+
+The repair remains open until landing. Full model gates remain separate.
