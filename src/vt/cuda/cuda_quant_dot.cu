@@ -56,6 +56,7 @@
 #include "vt/cuda/cuda_quant_iq_tables.cuh"  // d_iq2xxs_grid / d_iq3xxs_grid / d_ksigns / d_kmask
 #include "vt/cuda/graph_safe_scratch.h"      // RetireGraphScratch (cudagraph-safe grow-only)
 #include "vt/ops.h"
+#include "cuda_device_caps.h"
 #include "vt/quant.h"
 
 namespace vt::cuda {
@@ -2524,6 +2525,7 @@ void MatmulQ8_0GroupedCuda(Tensor& out, const Tensor& act_t, const Tensor& weigh
 
 #include "cuda_pascal_q5_decode.cuh"
 #include "cuda_pascal_q6_decode.cuh"
+#include "cuda_pascal_mmq_d4.cuh"
 
 // The kCUDA provider for OpId::kMatmulBTQuant. Validation already done by
 // vt::MatmulBTQuant (ops.cpp) before dispatch; this mirrors the CPU kernel's
@@ -2535,6 +2537,13 @@ void MatmulBTQuantKernelCuda(Queue& q, Tensor& out, const Tensor& a,
   const int64_t k = a.shape[1];
   const int64_t n = b.shape[0];
   if (m == 0 || n == 0) return;
+
+  if ((b.dtype == DType::kQ5_0 || b.dtype == DType::kQ8_0) &&
+      IsPascalMmqD4Eligible(out, a, b)) {
+    LaunchPascalMmqD4(out, a, b, s);
+    CheckCuda(cudaGetLastError(), "Pascal MMQ D4 launch");
+    return;
+  }
 
   // Q8_0 (32-block, Q8_0-activation) runs its own on-GPU path — the DeepSeek-V4
   // MLA/o-LoRA/shared-expert/lm_head weights. No CPU fallback, no stream sync.
