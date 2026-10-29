@@ -463,6 +463,10 @@ def audit() -> list[dict]:
 # reachable on this fleet. The credit returns when the row reaches a gate-obliged
 # state, which its W2 does.
 RUNNABLE_BASELINE = frozenset({
+    # 2026-10-29: +ENG-LUMENENGINE-BRAND enters ACTIVE with its committed spec.
+    # Its Gates section invokes scripts/agent-preflight.sh --quiet, which can
+    # fail. Pin this runnable credit without changing classifier semantics.
+    "ENG-LUMENENGINE-BRAND",
     # 2026-10-29: Pascal and Volta enter ACTIVE with one shared committed spec.
     # Each matrix row resolves that spec, whose Gates section names the
     # preflight command. Pin all three runnable rows in the same campaign.
