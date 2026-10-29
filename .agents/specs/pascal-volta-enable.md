@@ -271,3 +271,15 @@ Require completion and finite full logits. Reverting the head dispatch must
 reproduce the inner-dimension error, including on the pinned TinyLlama model.
 Preserve tied-head and existing non-NK paths. Full model oracle and performance
 gates remain separate obligations after this correctness repair.
+
+
+## Exact DSR registrar accounting repair
+
+Issue: `ISSUE-LOCAL-01M641H5N4MSWRZSAN07YEND4C`.
+Base: `9f4b15d93f98035043a26b82ee3e09b333bd6c64`. Scope: the DSR gate and its synthetic-tree regression suite only. No product dispatch or DSR baseline changes.
+
+The new `src/vllm/v1/attention/cuda_legacy.cpp` declares one CUDA_LEGACY backend registration key. It contains capability metadata rather than a shared-model device branch. The existing checker policy at `scripts/check-device-leakage.py:360-366` states that an integer allowlist entry means exactly that many platform-definition references; adjacent backend and GDN registrar entries already use that policy. Add one exact-count `kcuda` entry for this file, with the registration rationale. Do not allow the whole file or increase the shared-layer baseline.
+
+First extend the existing synthetic tree with the same registrar and observe its current gate fail. Add regressions proving that an extra device branch in this descriptor file fails the exact-count guard and that removing its sole registration fails. The existing planted shared-model CUDA branch mutation must continue to fail. Run the complete device-leakage mutation suite and the live gate. A missing environment value remains pending; no environment or GPU value is needed for this offline checker repair.
+
+Evidence must include the red result, focused green result, live gate, record/style checks, and final immutable head for independent review. Full preflight is invoked before edits; its unrelated baseline failures are not this repair's scope. Stop if the registrar is not a legitimate platform descriptor or if the change requires broad checker-semantic relaxation. The issue remains open until landing; integration remains with the operator.
