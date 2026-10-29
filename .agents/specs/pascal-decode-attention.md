@@ -9,8 +9,9 @@ The real TinyLlama P620 trace records 2772 portable decode launches taking
 2647 ms. At head dimension 64, the existing 256-thread kernel reduces each
 key through shared memory and eight block barriers, with additional state
 barriers. Reuse the shared register/warp-strided online-softmax kernel for
-legacy CUDA head dimensions 64 and 128. Add the missing two-element-per-lane
-loads in a separate legacy hardware header. Preserve modern CUDA dispatch,
+Pascal CUDA head dimensions 64 and 128. Add the missing two-element-per-lane
+loads in a separate legacy hardware header. Keep Volta on its existing policy until delivered hardware is validated (TODO).
+Preserve modern CUDA dispatch,
 existing environment overrides, paged strides, GQA mapping, causal and local
 masking, softcap, and BF16/F32 input/output handling. FP8 remains on its existing
 scaled block path. No ABI, configuration, model or quantization changes.
