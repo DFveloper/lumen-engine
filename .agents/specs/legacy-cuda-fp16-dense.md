@@ -292,3 +292,14 @@ The helper consumes test tensors only. It never calls a production operation or 
 Compare registered merged and split operation results with this independent reference at zero absolute and relative tolerance.
 Preserve the original FP16, BF16, and F32 shape matrix. Add a fixed half intermediate rounding fixture.
 A separate mutation removes the half intermediate rounding and must fail that fixture.
+
+## Wave 1 BF16 activation correction, 30 October 2026
+
+The required exact activation matrix exposes an existing newer-target defect.
+Split and merged SiLU round BF16 intermediates only when `__CUDA_ARCH__ < 750`.
+Pinned primary scalar and packed kernels round that intermediate on every target.
+The operator authorizes removal of this architecture condition only for these two owned SiLU computations.
+Preserve F32 computation and existing Pascal and Volta BF16 results.
+The full exact upstream test remains unconditional. Do not scope the test away from newer hardware.
+Modern hardware execution remains PENDING because this host has only the P620.
+Compile a modern specialization when this toolkit accepts it. Do not present compilation as runtime evidence.
