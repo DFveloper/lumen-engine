@@ -3132,6 +3132,11 @@ target_link_libraries(vllm_capi_c_check PRIVATE vllm::vllm)
 target_compile_options(vllm_capi_c_check PRIVATE
   $<$<COMPILE_LANGUAGE:C>:-Wall -Wextra -Werror -std=c11>)
 
+# Test each public header in its own translation unit.
+add_executable(test_lumenengine_legacy_header_c branding/legacy_consumer.c)
+target_link_libraries(test_lumenengine_legacy_header_c PRIVATE vllm::shared)
+vllm_cpp_set_warnings(test_lumenengine_legacy_header_c)
+add_test(NAME test_lumenengine_legacy_header_c COMMAND test_lumenengine_legacy_header_c)
 # Additive public names must remain available to ordinary CTest consumers.
 add_executable(test_lumenengine_header_cpp branding/consumer.cpp)
 target_link_libraries(test_lumenengine_header_cpp PRIVATE LumenEngine::LumenEngine)

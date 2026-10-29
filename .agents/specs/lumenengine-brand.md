@@ -47,6 +47,13 @@ Use one PR with this spec committed before implementation. Issue and exact evide
 
 Both LumenEngine targets select the shared C ABI library. This keeps build-tree and installed consumers consistent without exporting private static backend dependencies. Existing `vllm::vllm` remains the static build-tree target. A new `find_package(LumenEngine CONFIG)` package exposes the shared aliases and `vllm::shared`. The package preserves a target already defined by its caller.
 
+## Review repairs
+
+Independent review identified two test blind spots. Compile each public header
+in a separate C11 and C++20 caller. Pin legacy server version bytes independently
+of alias equality. See [repair evidence](../evidence/lumenengine-brand/review-repair.md).
+The repairs are tracked by `ISSUE-LOCAL-01M63MYTWBYSRRCEMAY20QR08M`.
+
 ## Evidence
 
 See [the CPU packaging report](../evidence/lumenengine-brand/SUMMARY.md) for red-before tests, installed consumer results, command compatibility, mutations, and external limits. The issue remains open until landing.

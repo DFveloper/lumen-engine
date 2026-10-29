@@ -26,7 +26,7 @@ run('cmake', '-S', source / 'tests/branding', '-B', build,
     '-DVLLM_CPP_BUILD_EXAMPLES=ON', '-DVLLM_CPP_HF_DOWNLOAD=OFF',
     '-DCMAKE_BUILD_TYPE=Release', '-DCMAKE_CXX_FLAGS_RELEASE=-O0 -DNDEBUG')
 run('cmake', '--build', build, '--target', 'branding_old', 'branding_new',
-    'branding_shared', 'branding_c', 'branding_static', 'branding_dlopen', 'lumenengine-cli',
+    'branding_shared', 'branding_c', 'branding_old_c', 'branding_static', 'branding_dlopen', 'lumenengine-cli',
     'lumenengine-server', 'lumenengine-bench', '-j4')
 run('ctest', '--test-dir', build, '-R', '^branding_', '--output-on-failure')
 run(sys.executable, source / 'tests/branding/check_commands.py', build / 'engine/examples')

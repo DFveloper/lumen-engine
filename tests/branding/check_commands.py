@@ -6,6 +6,8 @@ import subprocess
 import sys
 
 root = pathlib.Path(sys.argv[1]).resolve()
+legacy_version = (pathlib.Path(__file__).resolve().parents[2] /
+                  '.agents/evidence/lumenengine-brand/legacy-server-version.txt').read_bytes()
 extension = '.exe' if os.name == 'nt' else ''
 for suffix in ('cli', 'server', 'bench'):
     old = root / ('vllm-' + suffix + extension)
@@ -21,6 +23,8 @@ for suffix in ('cli', 'server', 'bench'):
             left = getattr(before, channel).replace(str(old).encode(), b'COMMAND')
             right = getattr(after, channel).replace(str(new).encode(), b'COMMAND')
             assert left == right, (suffix, flag, channel)
+        if flag == '--version':
+            assert before.stdout == after.stdout == legacy_version, 'legacy server version changed'
         if flag == '--help':
             assert b'LumenEngine' in after.stdout + after.stderr, suffix
 print('PASS: cli/server/bench aliases, help, and compatible server version')
