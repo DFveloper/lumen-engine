@@ -243,3 +243,14 @@ Test synthetic score order, whitespace, byte fallback, special tokens, malformed
 metadata, and digit splitting. Compare actual checkpoint encode/decode against
 the pinned oracle. Mutate each new production branch and require failure.
 No model forward, quantization, or CUDA kernel changes belong to this repair.
+
+## Dense shard descriptor contract regression
+
+`ISSUE-LOCAL-01M63WWWN3EETEG29PF1ME9BNN` records four guard mutations that
+escaped the valid-only dense shard tests. Preserve production behavior. Add
+malformed descriptors through `vt::MergedGemmDense` for count and array
+contracts, unsupported fused providers, epilogue arity, and epilogue outputs.
+Use allocated, valid operands where a removed guard can continue safely.
+Require the exact guard diagnostic and exception type. Each removed guard
+must fail the focused host suite, then restore the complete passing suite.
+The shared production implementation and real-model gates remain unchanged.
