@@ -267,3 +267,18 @@ Do not repair the coordinating implementer's own review findings.
 Wave4 owns the staged auto-model wiring for BACKEND-CUDA-SM061. The row-owned canonical issue is named above.
 Implementation waves, upstream test ports, real FP16 primary-oracle eligibility, independent mutation review, actual-model token gates and all memory/performance measurements remain owed.
 No implementation or acceptance result is implied by this spec-only commit.
+
+## Wave 1 scope amendment, 29 October 2026
+
+The operator authorizes two required extensions before Wave1 implementation.
+`LaunchEmbeddingQuant` lives in `src/vt/cuda/cuda_quant_dot.cu:3044-3077`.
+Wave1 owns only the quantized embedding output store and launch dispatch there.
+Wave2 retains every quantized GEMM kernel, policy, and activation format.
+
+The existing provider supports predicate describes a device, not a scalar type.
+A shared wrapper cannot admit FP16 safely without identifying its selected provider.
+Extend `include/vt/op_provider.h` and `src/vt/op_provider.cpp` with additive scalar capability registration and query functions.
+Keep the `OpProvider` layout, aggregate initialization, and existing signatures unchanged.
+Unregistered scalar capabilities remain false. Publish FP16 only for implemented CUDA scalar operations.
+Test selection with a higher priority provider that does not publish FP16.
+No device-name branch or global FP16 output admission belongs in the shared wrappers.
