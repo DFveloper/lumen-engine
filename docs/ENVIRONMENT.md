@@ -196,13 +196,15 @@ most weight bytes remotely. Measured on the 4-node aarch64 host
 (`docs/bench-evidence/kolibri1-numa-interleave-20261009.md`): 4.19 to 4.97
 decode tok/s at 32 threads with the 16 GiB dequant cache (+18.6%), prefill
 −14%, golden decode chain unchanged. The guard saves and restores the caller's
-mempolicy, and it is inert on single-node hosts and on Windows. The lever
+mempolicy, and it is inert on single-node hosts and on Windows. On a host that
+refuses `set_mempolicy` (restricted sandboxes do), the unset knob continues
+with the default policy after one warning (see the row). The lever
 composes with the dequant cache; with the cache off and 8 threads its effect
 collapses to ~2%, because that path is allocation-bound.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `VT_KOLIBRI1_NUMA_INTERLEAVE` | **on** | `=0` (exactly) disables the guard entirely: the arenas allocate under the process's default policy and nothing touches the mempolicy. Unset or any other value leaves it on. Read on every guard construction (uncached), so a test binary can flip it mid-process; the call rate is per load and per cache miss, never per element. This is the A/B off switch and the first thing to set to `0` when a NUMA-policy defect is suspected on a multi-node host |
+| `VT_KOLIBRI1_NUMA_INTERLEAVE` | **on** | Three-valued. Unset — and any value other than `0`/`1` — is best-effort: the guard tries `set_mempolicy(MPOL_INTERLEAVE)` and, when the host refuses it (restricted sandboxes do), emits ONE named warning on stderr (the errno and this knob's name) and continues with the process's default policy — the pre-NUMA-row allocation path exactly, with nothing to restore. `=0` (exactly) disables the guard entirely: the arenas allocate under the process's default policy and nothing touches the mempolicy. `=1` (exactly) is strict: the guard requires the interleave and throws by name on refusal (the pre-2026-10 behavior, for a host that wants the guarantee). Read on every guard construction (uncached), so a test binary can flip it mid-process; the call rate is per load and per cache miss, never per element. This is the A/B off switch and the first thing to set to `0` when a NUMA-policy defect is suspected on a multi-node host |
 
 ## Kolibri-1 CPU dequant cache
 
