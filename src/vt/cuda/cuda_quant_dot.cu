@@ -1023,8 +1023,11 @@ __global__ void QuantDotGemmKernel(OutT* __restrict__ out,
                                    size_t w_block_bytes) {
   const int64_t warp = static_cast<int64_t>(blockIdx.x) * blockDim.y + threadIdx.y;
   if (warp >= m * n) return;  // uniform across the whole warp (idx independent of lane)
-  const int64_t i = warp / n;
-  const int64_t j = warp % n;
+  // Map consecutive warps to the SAME output row j and consecutive activation
+  // rows i, so the four warps of a block share one weight row through L1
+  // instead of streaming four different rows. m == 1 (decode) is unchanged.
+  const int64_t j = warp / m;
+  const int64_t i = warp % m;
   const int lane = threadIdx.x;
 
   const uint8_t* w_row = weight + static_cast<size_t>(j) * w_row_bytes;
@@ -2531,6 +2534,7 @@ void MatmulQ8_0GroupedCuda(Tensor& out, const Tensor& act_t, const Tensor& weigh
 
 #include "cuda_pascal_q5_decode.cuh"
 #include "cuda_pascal_q6_decode.cuh"
+#include "cuda_pascal_q4k_decode.cuh"
 #include "cuda_pascal_mmq_d4.cuh"
 
 // The kCUDA provider for OpId::kMatmulBTQuant. Validation already done by
@@ -2607,6 +2611,12 @@ void MatmulBTQuantKernelCuda(Queue& q, Tensor& out, const Tensor& a,
   if (b.dtype == DType::kQ6_K && m == 1 && IsPascalQ5Decode()) {
     LaunchPascalQ6Decode(out, a, b, n, nsb, s);
     CheckCuda(cudaGetLastError(), "Pascal Q6_K decode launch");
+    return;
+  }
+  if (b.dtype == DType::kQ4_K && m == 1 && IsPascalQ5Decode() &&
+      PascalQ4KDecodeEnabled()) {
+    LaunchPascalQ4KDecode(out, a, b, n, nsb, s);
+    CheckCuda(cudaGetLastError(), "Pascal Q4_K decode launch");
     return;
   }
 
