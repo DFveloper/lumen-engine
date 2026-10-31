@@ -772,3 +772,69 @@ units green (test_ops_quant_dot, test_ops_quant_traits, test_gguf_keep_quant,
 test_gguf_dequant); `test_qwen36_gguf_engine` STANDALONE 2/2 · 16/16 on APEX
 Compact+Balanced with repack live; CUDA regression set UNCHANGED (see the ledger
 G7 row), goldens content-hash identical before/after.
+
+## G5 plan (2026-10-31) — x86 AVX2 tier, unblocked by a fresh same-file profile
+
+**Why G5 can start now.** The roadmap marked G5 blocked on two conditions: a
+fresh op-dispatch profile and a non-`VOID` x86 host. Both are satisfied by a
+direct same-file A/B on the Flare GSQ artifact, not by a stale percentage:
+
+| Arm (same GGUF, greedy, 32 tokens, warm) | Request 1 | Request 2 | Startup |
+|---|---|---|---|
+| LumenEngine `evidence/gsq-lumen/candidate-server` (`-t 18`, keep-quant) | 14.80 s | 13.95 s | 25.8 s |
+| llama.cpp b10451 `llama-server -t 18 -tb 18 -fa on` | 3.91 s | 4.24 s | 3.0 s |
+
+Both emitted ` 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, `. The model is 3.8 GB with 234
+IQ3_S, 104 Q6_K and 42 Q4_K tensors, so decode is dominated by exactly the
+three `vec_dot`s that `BlockVecDot` still routes to the portable tier
+([cpu_quant_dot.cpp:22](../../src/vt/cpu/cpu_quant_dot.cpp#L22),
+`BlockVecDot` cases at `:1245-1249`). This is a measured 3.5× end-to-end gap on
+the user's model, not the q8_0/f16 mix that made the 2026-07-22 profile rank
+G5 behind the elementwise GEMM.
+
+**Scope.** Add `src/vt/cpu/cpu_quant_dot_avx2.cpp`, one translation unit built
+with `-mavx2 -mf16c` (the existing per-file pattern at
+[CMakeLists.txt:1545](../../CMakeLists.txt#L1545)), containing the three
+upstream AVX2 kernels for the encodings this artifact uses. Keep the portable
+tier as the universal fallback and select at runtime from
+`DetectX86IsaCaps().avx2`, with `VT_CPU_QUANT_AVX2=auto|portable` as the test
+and benchmark seam (the same shape as `VT_CPU_Q8_DOT`).
+
+**Upstream anchors** (registered llama.cpp b10451 source,
+`ggml/src/ggml-cpu/arch/x86/quants.c`):
+
+| Component | Anchor | Ported as |
+|---|---|---|
+| `ggml_vec_dot_q4_K_q8_K` AVX2 | `:2018-2100` | `VecDotQ4_KQ8_K_AVX2` |
+| `ggml_vec_dot_q6_K_q8_K` AVX2 | `:2406-2478` | `VecDotQ6_KQ8_K_AVX2` |
+| `ggml_vec_dot_iq3_s_q8_K` AVX2 | `:3364-3456` | `VecDotIQ3_SQ8_K_AVX2` |
+| `hsum_float_8`, `get_scale_shuffle_k4`, `get_scale_shuffle` | `:42-50`, `:495-530` | local helpers, same values |
+| block layouts | `ggml-common.h:317-327, 352-357, 386-392` | already mirrored in `cpu_quant_blocks.h` |
+
+The upstream FMA intrinsics become `_mm256_add_ps(_mm256_mul_ps(...))` because
+this tree builds with global `-ffp-contract=off`; the reduction order is
+otherwise upstream's. That keeps the AVX2 TU valid on AVX2 CPUs without FMA and
+preserves the repository's non-fusion discipline.
+
+**Tests.** Extend `tests/vt/test_ops_quant_dot.cpp`: the existing G3
+`vec_dot == independent f64 dequantize-then-dot` case runs unchanged and now
+exercises the AVX2 arm on this host; add a selection test that
+`VT_CPU_QUANT_AVX2=portable` restores the portable kernel and that the two arms
+agree within the G3 tolerance. The same-file runtime gate is token equality
+against the recorded baseline plus `verify.py`, not a new golden.
+
+**Gates.** (1) `test_ops_quant_dot` green with AVX2 auto and with
+`VT_CPU_QUANT_AVX2=portable`; (2) the Flare server built from the same source
+prints the identical 32-token completion as the recorded baseline; (3) warm
+request latency improves on the same host and same binary recipe, reported with
+the contention state; (4) `verify.py` passes. vLLM has no CPU GGUF decode path,
+so this leaf makes no vLLM parity claim; llama.cpp remains the secondary oracle
+used only for the denominator.
+
+**Stop conditions.** Any token divergence, non-finite value, build warning, or
+G3 failure under either arm stops the change. A measured regression means the
+tier stays opt-in (`VT_CPU_QUANT_AVX2=portable` is the default) and the result
+is recorded, not widened into the portable arm.
+
+**Evidence.** `.agents/evidence/quant-g5-avx2/` holds the baseline log, the
+post-change log, the exact commands, and the host contention state.
