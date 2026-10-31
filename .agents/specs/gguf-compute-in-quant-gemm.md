@@ -1,7 +1,7 @@
 # Leaf spec: GGUF compute-in-quant GEMM — ggml tensor-traits port into vt::cpu
 
 **Row:** `QUANT-GGUF-CIQ-GEMM` (quantization-matrix.md, leaf of the
-`QUANT-GGUF-COMPUTE` block) · **status:** `ACTIVE` — **G1-G4 landed** (2026-07-22): the portable tier-0 quant GEMM is complete, gated at the OP level, and **now routed end to end** — `vt::MatmulBT` dispatches a block-dtype weight to `kMatmulBTQuant`, keep-quant is the production DEFAULT wherever that op is registered, and the six routed encodings compute in quant. Measured on the binding host: decode **3.45×**, prefill **4.16×**, peak RSS **1.16×** less, output tokens **byte-identical**. G5-G8 open, and the measurement RE-RANKS them (see the G4 result below: the remaining CPU gap is now the ELEMENTWISE bf16/f16 GEMM, not the quant one) ·
+`QUANT-GGUF-COMPUTE` block) · **status:** `ACTIVE` — **G1-G4 landed** (2026-07-22): the portable tier-0 quant GEMM is complete, gated at the OP level, and **now routed end to end** — `vt::MatmulBT` dispatches a block-dtype weight to `kMatmulBTQuant`, keep-quant is the production DEFAULT wherever that op is registered, and the six routed encodings compute in quant. Measured on the binding host: decode **3.45×**, prefill **4.16×**, peak RSS **1.16×** less, output tokens **byte-identical**. G5 landed 2026-10-31; G8 open (G6 and G7 landed 2026-07-23), and the G4 measurement RE-RANKED them (see the G4 result below: the remaining CPU gap is the ELEMENTWISE bf16/f16 GEMM, not the quant one) ·
 **upstream pin:** llama.cpp local fork `237ad9b96` (b9892) ·
 **parent evidence:** B4 decision row
 ([parity-ledger.md L290](../parity-ledger.md#L290)) — the "vendor IF proven
@@ -156,7 +156,7 @@ there (i8mm repack expected) before comparing.
 | G2 | activation quant | `quantize_row_q8_0/q8_K` ports + scratch sizing; unit tests | G1 | **DONE** 2026-07-22 |
 | G3 | tier-0 vec_dot kernels | the six generic `vec_dot` ports + GEMM wiring + test-quantize-fns/backend-ops ports + parity goldens | G1, G2 | **DONE** 2026-07-22 |
 | G4 | e2e enablement | route `MatmulBT` call sites on block dtype; engine gates (3) + `VT_CPU_REF` A/B; first B4-recipe measurement (tier-0 milestone) | G3, loader L2-L3, threadpool W2 | **DONE** 2026-07-22 |
-| G5 | x86 AVX2 tier | `arch/x86` vec_dot ports + feature probe; tier-1 milestone measurement | G3 | open — **BLOCKED on a fresh profile** (see G4 §Consequences item 0) and on a non-`VOID` x86 host |
+| G5 | x86 AVX2 tier | `arch/x86` vec_dot ports + feature probe; tier-1 milestone measurement | G3 | **DONE** 2026-10-31 — AVX2 `vec_dot` for q4_K/q6_K/IQ3_S behind `VT_CPU_QUANT_AVX2`, portable fallback, 2.65× same-binary decode on Flare GSQ (see G5 result below) |
 | G6 | Arm NEON/i8mm tier | `arch/arm` ports incl. `nrows==2` mmla; GB10 measurement | G3 | **DONE** 2026-07-23 — i8mm mmla `nrc==2` tier for q8_0/q4_0/q4_K/q6_K, 2x2-tiled into `kMatmulBTQuant` (see G6 result below) |
 | G7 | repack tier | repack-at-load + gemv/gemm + `quantize_mat_t`; selection parity vs `:4528`; closes gates 4-5 | G4 + loader L2 | **DONE** 2026-07-23 — q8_0 `q8_0_4x8` repack-at-load (block_q8_0x4 interleave), bit-identical i8mm gemm+gemv, byte-permute weight + non-fused MAC (see G7 result below) |
 | G8 | ledger + matrix closure | full A/B series, ledger row, flip `C`/`E`/`P` cells per encoding row (Q8_0/Q4_K/Q5_K/Q6_K/Q3_K/Q4_0), roadmap update | G4-G7 | open |
@@ -838,3 +838,83 @@ is recorded, not widened into the portable arm.
 
 **Evidence.** `.agents/evidence/quant-g5-avx2/` holds the baseline log, the
 post-change log, the exact commands, and the host contention state.
+
+## G5 result (2026-10-31) — x86 AVX2 tier, landed + installed on the Flare host
+
+**What landed.** `src/vt/cpu/cpu_quant_dot_avx2.cpp`, one translation unit built
+with `-mavx2 -mf16c`, carrying the AVX2 `vec_dot` arms of llama.cpp b10451
+`arch/x86/quants.c:2018-2100` (q4_K), `:2406-2478` (q6_K) and `:3364-3456`
+(IQ3_S), selected at runtime by `DetectX86IsaCaps().avx2` through
+`SelectQuantKVecDot`, with `VT_CPU_QUANT_AVX2=auto|portable|avx2`. The portable
+tier stays the universal fallback and is also the defeat seam that makes a
+same-binary A/B possible. `BlockVecDot` gained the three dispatch arms, so the
+tier is reachable from production decode, not only from the selector.
+
+**Same-binary A/B** (one candidate binary, Flare GSQ
+`Nemotron-3.5-Bolt-E4B-GSQ-RCO-IQ3_M.gguf`, greedy 32 tokens, one warmup,
+interleaved arms, Xeon E5-2696 v3 18c/36t AVX2/no-AVX-512, shared host at
+load average 16-19):
+
+| Arm | Request 1 (s) | Request 2 (s) | Mean (s) |
+|---|---|---|---|
+| `VT_CPU_QUANT_AVX2=portable` | 16.874 / 16.536 | 16.630 / 16.689 | 16.68 |
+| `VT_CPU_QUANT_AVX2=avx2` | 6.158 / 6.403 | 6.188 / 6.459 | 6.30 |
+
+**2.65×** decode from the three kernels, and all four runs emitted the same
+32-token text byte for byte. Across the whole served artifact the ported
+encodings are 234 IQ3_S + 104 Q6_K + 42 Q4_K tensors, so this is the
+decode-dominant path, not a microbenchmark.
+
+**Against the installed baseline and the secondary oracle.** The pre-G5
+installed binary measured 14.39/14.76 s at 25.8 s startup; llama.cpp b10451
+`llama-server -t 18 -tb 18 -fa on` measured 3.91/4.24 s at 3.0 s startup on the
+same file. G5 therefore closes the decode gap from ~3.5× to ~1.5× and leaves it
+open: the three `vec_dot`s now execute llama.cpp's own algorithms, so the
+residual is elsewhere and is **not** declared a ceiling.
+
+**Live service after install** (load average 17.22): 6.23 s and 6.21 s for the
+same 32 tokens with identical text; `verify.py --expect-cache on` PASS
+(prefix-cache queries 115, hits 96 at the re-run, completion ` a mammal.`,
+`finish_reason=stop`). The default `gsq-rco-cpu` profile serves the AVX2 tier;
+`VT_CPU_QUANT_AVX2=portable` and the pre-G5 binary are both recorded rollbacks.
+
+**Defaults, and why each has its value.**
+
+- `VT_CPU_QUANT_AVX2=auto` is the default because both gate 1 (auto and
+  portable green) and gate 3 (latency improves) passed; the stop condition that
+  would have kept the tier opt-in did not trigger.
+- `-mavx2 -mf16c` is per-file, matching the existing per-TU ISA pattern, so the
+  rest of the binary keeps its baseline ISA and an AVX2-less x86 CPU falls back
+  at runtime rather than faulting.
+- FMA intrinsics are written as `_mm256_add_ps(_mm256_mul_ps(...))` because the
+  tree builds with `-ffp-contract=off`; the reduction order is otherwise
+  upstream's, which is what keeps the token gate meaningful.
+
+**Rejected alternatives.**
+
+- *AVX-512 tier.* The gating host has no AVX-512, so it cannot be exercised
+  here. Recorded as owed, not shipped blind.
+- *Adding IQ3_S to `kWeightCases`.* The shared MatmulBTQuant NMSE case runs at
+  m=1,n=1, where an IQ3_S dot cancels near zero and the unmutated NMSE is
+  already ~1.10. A G5-local case list covers IQ3_S without weakening that
+  ceiling.
+- *One kernel with a runtime branch inside the block loop.* It reintroduces a
+  per-block branch on the decode hot path; llama.cpp keeps separate TUs and so
+  does this port.
+- *Widening the portable kernels instead of adding a tier.* The portable tier
+  is the fallback and the A/B baseline; changing it would remove both.
+
+**Correctness.** `test_ops_quant_dot` is 35 cases / 285,691 assertions green
+under `auto`, `portable` and `avx2`. The G5 case proves all three things a
+selector-only test cannot: `auto` chooses the AVX2 arm, `portable` really
+restores the portable kernel, and both stay within `1e-5 * L1` of an independent
+f64 dequantize-then-dot reference for q4_K, q6_K and IQ3_S. The mutation battery
+reddens the numeric checks for an IQ3_S sign change and for the `2*ls+1`
+weight, and deleting the production `BlockVecDot` arm reddens the routing
+checks, so the case measures a reached capability.
+
+**Owed.** A merged-head x86 profile to attribute the remaining ~1.5× (the
+2026-08-06 aarch64 profile put 47 % of decode in threadpool synchronisation at
+M=1; that hypothesis is untested on this host). Startup is 25.8 s against
+llama.cpp's 3.0 s. AVX-512, and the AVX2 arms for q3_K/q5_K/q8_0/q4_0, are not
+ported because this artifact does not use them.
