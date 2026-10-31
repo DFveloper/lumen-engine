@@ -472,7 +472,7 @@ and up rows into one owner, so plan for the whole checkpoint in host memory.
 
 Refused arms:
 
-- **GGUF.** llama.cpp `b10451` defines `cohere2moe`; the loader arm is owed.
+- **GGUF.** llama.cpp `b11765` (the stock release pin since 2026-10-31; `b10451` first defined the architecture) defines `cohere2moe`; the loader arm is owed.
 - **Quantized siblings** (FP8, W4A16, NVFP4, anything with a
   `quantization_config`). Load the bf16 checkpoint.
 - **`use_qk_norm: true`.** The pinned vLLM `cohere2_moe.py` has no q/k norm.
@@ -1006,6 +1006,45 @@ The [author's vLLM plugin](../.agents/oracles/aleph-alpha-inference.md) runs on
 CPU with a BF16-converted reference checkpoint, but its outputs differ from the transcription.
 Full correctness and speed parity against the plugin remain unverified.
 
+### Kolibri-1 from a GGUF k-quant
+
+The `kolibri1` GGUF arm serves the mudler APEX k-quant conversion on CPU
+through the same path; point `--model` straight at the file (the config comes
+from the GGUF's own metadata):
+
+```sh
+./build/examples/vllm-bench --model /path/to/Kolibri-1-APEX-I-Micro.gguf \
+  --num-prompts 8 --input-len 128 --output-len 32 --concurrency 4 \
+  --seed 0 --temperature 0
+```
+
+Weights are the one part of a port a reader cannot infer: the gated artifact
+is `mudler/Kolibri-1-APEX-GGUF` @ `55a4781439f1e8abb7e46c795e0681d6b2b7f4d9`,
+file `Kolibri-1-APEX-I-Micro.gguf`, 22,173,110,464 bytes, sha256
+`3edfaf09aac60d60cde56744fe1e0a7e5362c5549d5eb12d97ec4a9c83c90e0e` (a repo id
+alone is not a pin; this converter re-quantizes tiers in place under unchanged
+names). The tier sweep also measured `Kolibri-1-APEX-I-Mini.gguf`
+(28,973,904,064 bytes, sha256
+`64e61300f557de747957096b70907737e063b9b762ab51811e28a6ef57e725a4`) — it
+measures FARTHER from the fp8 oracle than I-Micro despite the larger container
+(per-tensor quantization is not monotone in size); I-Micro is the documented
+tier. See the [arm record](../docs/bench-evidence/kolibri1-gguf-arm-20261030/README.md).
+
+Correctness: the token gate (`test_kolibri1_gguf`, `-DKOLIBRI1_GGUF_PATH=...`)
+replays the fp8 safetensors goldens under the developer-adjudicated
+quantized-arm record (2026-10-30, Option A — quantized arms are adjudicated on
+their own measured record; the fp8 2.5 band governs same-weights kernel
+comparisons only): I-Micro 37/44 golden greedy positions, worst topk diff
+3.245, 2 hard flips. **The quantization-matched llama.cpp floor now EXISTS**
+(row `LLAMA-CPP-PIN-ADVANCE`, 2026-10-31): the stock pin advanced to release
+`b11765` (`9df0b73c`), which loads this artifact, and on the same file, bench
+zone and thread counts it measures **17.98 ± 0.12 tok/s (16t)** and
+**20.18 ± 0.61 tok/s (32t)** against our arm's 4.97 / 6.55 — llama.cpp is
+3.62x / 3.08x ahead
+([evidence](bench-evidence/llama-cpp-pin-advance-20261031/README.md)). The
+gap is recorded, not adjudicated: closing it belongs to the kolibri1 CPU
+performance rows, not the GGUF-arm record.
+
 ## Flint (RecursiveSI) from a GGUF k-quant
 
 The `flint`-architecture container (hybrid FFSSSF sliding/full attention, no
@@ -1021,6 +1060,36 @@ build/examples/vllm-bench --model /mnt/models/flint-GGUF/flint-Q4_K_M.gguf \
   --num-prompts 8 --input-len 128 --output-len 32 --concurrency 4 \
   --seed 0 --temperature 0
 ```
+
+The default arm dequantizes the container to bf16 elementwise weights.
+`VT_FLINT_KEEP_QUANT=1` instead KEEPS the GGUF block tensors: the paged arm
+routes the linear layers and the `lm_head` through the per-dtype dispatch
+seam (`vt::MatmulBT` → the CPU compute-in-quant GEMM, `vt/ops.cpp`), so the
+k-quant container serves packed — no bf16 copy of the weights is ever
+materialized:
+
+```sh
+VT_FLINT_KEEP_QUANT=1 ./build/vllm-server \
+  --model /mnt/models/flint-GGUF/flint-Q4_K_M.gguf
+```
+
+Size the CPU threadpool to the cpu budget you give the process: the pool
+defaults to `hardware_concurrency()`, and a 128-thread pool pinned to a
+16-cpu `taskset` collapses on its own barrier (the flint keep-quant arm
+measured 1.20 tok/s that way and 5.51 tok/s with the pool matched — see
+`docs/benchmarks/flint-kq-cpu.md`):
+
+```sh
+VT_FLINT_KEEP_QUANT=1 VLLM_CPP_CPU_THREADS=16 taskset -c 32-47 \
+  ./build/vllm-server --model /mnt/models/flint-GGUF/flint-Q4_K_M.gguf
+```
+
+Correctness record for the keep-quant arm (`test_flint_gguf`, keep-quant
+paged gate): 53/60 greedy positions token-exact against the pinned
+llama-cpp-flint oracle goldens, 0 hard flips, every divergence inside the
+house 2.5-nat near-tie band (llama.cpp uses integer block dots, so
+token-exactness is not expected; the band governs). The loader refuses an
+encoding the CPU cannot decode by name, before any forward runs.
 
 Published containers on the dev share: `flint-GGUF/flint-Q4_K_M.gguf`
 (sha256 `20c89707f762af73f0840f7b2c2911193617e60cac2ae30a96cb2cda7c15927e`),
