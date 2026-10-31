@@ -92,6 +92,20 @@ The G5 case itself ran (not skipped): `-tc='*G5*' --success` reports 1 case,
 `BlockVecDot` routing, and both arms within `1e-5 * ref.l1` of an independent
 f64 dequantize-then-dot reference for 1, 3 and 5 blocks.
 
+## Mutation coverage (fresh review, 2026-10-31)
+
+Each mutation ran in a scratch copy, was built with `ninja test_ops_quant_dot`,
+and was restored byte-for-byte afterwards (sha256 confirmed after every run):
+
+| Mutation | Location | Observed red |
+|---|---|---|
+| IQ3_S sign `xor/sub` -> `xor/add` | `cpu_quant_dot_avx2.cpp:380,385` | 6 failures at `test_ops_quant_dot.cpp:765,769` for `name iq3_s`, nblocks 1/3/5 |
+| IQ3_S weight `2*ls+1` -> `2*ls+2` | `cpu_quant_dot_avx2.cpp:393-394` | 6 failures at the same two checks |
+| production `BlockVecDot` arm removed | `cpu_quant_dot.cpp:1267-1275` | 3 routing failures at `test_ops_quant_dot.cpp:730` for q4_K/q6_K/iq3_s |
+
+The first mutation is the one the pre-repair case missed: `kWeightCases` held
+no IQ3_S row, so the G5 filter never reached IQ3_S's numeric battery.
+
 ## How the candidate binary was produced
 
 The Flare loader (`gemma4_gguf_weights.cpp`) lives on the GSQ worktree, whose
