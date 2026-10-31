@@ -319,3 +319,64 @@ contract; the existing CPU op tests for the converted kernels; `verify.py
 **Stop conditions.** Stop and return `NEEDS_DECISION` if a conversion cannot
 preserve the per-element expression, or if any A/B run changes a single output
 byte without an explained arithmetic reason.
+
+## W5 RESULT (2026-11-01) — output-range split landed and measured
+
+**Same-binary A/B.** One arm per server start, identical flags, 18 threads,
+`VT_GGUF_KEEP_QUANT=1`, greedy 32 tokens, two runs per arm and three
+interleaved base/final pairs in one session at 1-minute load 9.8-12.4 on the
+AVX2 host:
+
+| arm | wall median | CPU median |
+|---|---|---|
+| before | 6.355 s | 114.08 s |
+| after | 5.495 s | 98.78 s |
+
+Wall **1.157x**, CPU **1.155x**. Every pair favours the after arm (1.224x,
+1.153x, 1.167x), so the ordering is not an artifact of drift. An earlier
+three-run bracket and two live captures at load 58-79 are VOID and are not
+quoted: the same binary moved between 13 and 27 s there.
+
+**Byte identity.** All twelve greedy runs returned the same 32 tokens. A
+`verify.py --expect-cache on` capture of the live service, compared field by
+field against the pre-change capture, differs in zero fields outside `id` and
+`created`.
+
+**Review and coverage.** Ten mutations were applied to a scratch copy of the
+head: both chunk-seam carries, both chunk starts, the rope split extent, the
+k-head index, the q/k boundary, and the add extent and seam. Nine went RED on
+a shipped suite. The tenth, `hh < hq` changed to `hh < hk`, stayed green
+because every shipped rope case is `T=1, Hq=Hk=1`; the pool determinism
+battery also omitted all four converted kernels. Both gaps are closed.
+
+A GQA case at `T=10, Hq=4, Hk=2, D=8, rot=6` compares all 320 q and 160 k
+slots bit-exactly against a reference computed from `cos`/`sin` in the test,
+and every kernel-running case now holds 32 guard words on each side of q and
+of k that are snapshotted before the call and compared bit for bit afterwards.
+The guards are load-bearing rather than decorative: the boundary mutant writes
+16 words before k and the head-shift mutant 30 words after it, so without them
+the run ended in heap corruption and a SIGABRT instead of an assertion. With
+them both mutants fail as assertion failures and exit normally, 233 and 156 of
+1,142 at four threads. The battery runs the four kernels at 1, 3 and 20
+threads, and reverting the add split extent leaves 378 of 384 elements
+unwritten. `test_ops_rope` 7 cases / 1,142 assertions, `test_cpu_threadpool`
+9 cases / 19,635 assertions (19,636 with the pool size set through the
+environment), and `test_ops_activation`, `test_ops_qkv_merge` and
+`test_ops_layernorm` unchanged at 27/291120, 2/14 and 6/9263.
+
+**Rejected levers, measured in the same session.** Twelve and eight threads,
+`taskset` pinning, `VT_CPU_MATMUL_STEAL=1` and `VT_CPU_SPIN_ROUNDS=0` all moved
+less than the run-to-run spread. Allocation is 36 ms of the request. One thread
+runs these kernels at llama.cpp's rate (1.47 s against 1.50 s per token), so
+the gap was parallelism, not arithmetic.
+
+**What stays open.** `kPagedAttention` still runs its decode body inline at
+about 0.30 s per 32-token request and `kRmsNorm` keeps the row split at about
+0.14 s; each is a separate change with its own issue. The ggml SIMD arm
+(`ggml_vec_gelu_f32`) stays owed as recorded above. The after arm is 5.495 s
+against llama.cpp's 5.0-5.3 s for the same file on the same host, so the
+remaining gap is small but not closed.
+
+**Evidence.** `evidence/gsq-lumen-w5-20261101/` in the serving deployment
+(`README.md`, `ab-calm-20261101.json`, `verify-before/`, `verify-after/`,
+`verify-live2/`).
