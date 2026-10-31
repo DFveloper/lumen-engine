@@ -83,13 +83,14 @@ ninja -j12 test_ops_quant_dot
 
 | Log | Tier | Result |
 |---|---|---|
-| `g5-test-default.log` | `auto` (AVX2 on this host) | 35/35 cases, 281,064 assertions, SUCCESS |
-| `g5-test-portable.log` | `VT_CPU_QUANT_AVX2=portable` | 35/35 cases, 281,064 assertions, SUCCESS |
-| `g5-test-forced.log` | `VT_CPU_QUANT_AVX2=avx2` | 35/35 cases, 281,064 assertions, SUCCESS |
+| `g5-test-default.log` | `auto` (AVX2 on this host) | 35/35 cases, 285,691 assertions, SUCCESS |
+| `g5-test-portable.log` | `VT_CPU_QUANT_AVX2=portable` | 35/35 cases, 285,691 assertions, SUCCESS |
+| `g5-test-forced.log` | `VT_CPU_QUANT_AVX2=avx2` | 35/35 cases, 285,691 assertions, SUCCESS |
 
 The G5 case itself ran (not skipped): `-tc='*G5*' --success` reports 1 case,
-9,255 assertions, `wide != portable`, production `BlockVecDot` routing, and both arms within `1e-5 * ref.l1` of
-an independent f64 dequantize-then-dot reference for 1, 3 and 5 blocks.
+13,882 assertions for q4_K, q6_K and iq3_s, `wide != portable`, production
+`BlockVecDot` routing, and both arms within `1e-5 * ref.l1` of an independent
+f64 dequantize-then-dot reference for 1, 3 and 5 blocks.
 
 ## How the candidate binary was produced
 

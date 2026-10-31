@@ -702,11 +702,17 @@ TEST_CASE("G5 AVX2 K-quant tier is selectable and matches the portable tier") {
     }
   } restore{had_previous, saved};
 
-  for (const WeightCase& c : kWeightCases) {
-    if (c.dtype != vt::DType::kQ4_K && c.dtype != vt::DType::kQ6_K &&
-        c.dtype != vt::DType::kIQ3_S) {
-      continue;
-    }
+  // A G5-local list keeps IQ3_S out of `kWeightCases`. The MatmulBTQuant NMSE
+  // case there runs at m=1,n=1, where IQ3_S's dot can cancel near zero and its
+  // unmutated NMSE is already ~1.10, so adding the row would fail that case.
+  // The q4_K and q6_K entries copy `kWeightCases` unchanged. IQ3_S's block is
+  // `d@0 qs@2 qh@66 scales@74 signs@78` (110 bytes).
+  const WeightCase kG5WeightCases[] = {
+      {vt::DType::kQ4_K, 256, 144, 0, 2, -1, "q4_K"},
+      {vt::DType::kQ6_K, 256, 210, 208, -1, -1, "q6_K"},
+      {vt::DType::kIQ3_S, 256, 110, 0, -1, -1, "iq3_s"},
+  };
+  for (const WeightCase& c : kG5WeightCases) {
     CAPTURE(std::string(c.name));
 
     VT_TEST_UNSETENV("VT_CPU_QUANT_AVX2");
@@ -715,16 +721,19 @@ TEST_CASE("G5 AVX2 K-quant tier is selectable and matches the portable tier") {
     REQUIRE(wide != nullptr);
     const vt::cpu::VecDotFn portable = vt::cpu::QuantKPortableVecDot(c.dtype);
     REQUIRE(portable != nullptr);
-    CHECK(wide != portable);
+    CHECK(reinterpret_cast<uintptr_t>(wide) !=
+          reinterpret_cast<uintptr_t>(portable));
 
     // The PRODUCTION dispatch must route to the wide kernel. Deleting the
     // SelectKQuantVecDot arm in BlockVecDot has to turn this case red; a test
     // that only called the selector would stay green with the tier unreached.
-    CHECK(vt::cpu::BlockVecDot(c.dtype) == wide);
+    CHECK(reinterpret_cast<uintptr_t>(vt::cpu::BlockVecDot(c.dtype)) ==
+          reinterpret_cast<uintptr_t>(wide));
 
     VT_TEST_SETENV("VT_CPU_QUANT_AVX2", "portable");
     CHECK(vt::cpu::SelectQuantKVecDot(c.dtype, nullptr) == nullptr);
-    CHECK(vt::cpu::BlockVecDot(c.dtype) == portable);
+    CHECK(reinterpret_cast<uintptr_t>(vt::cpu::BlockVecDot(c.dtype)) ==
+          reinterpret_cast<uintptr_t>(portable));
 
     VT_TEST_SETENV("VT_CPU_QUANT_AVX2", "avx2");
     CHECK(vt::cpu::SelectQuantKVecDot(c.dtype, nullptr) == wide);
