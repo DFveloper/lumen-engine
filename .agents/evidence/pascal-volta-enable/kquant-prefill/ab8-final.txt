@@ -1,0 +1,98 @@
+{"model": "tiny", "axis": "p16-t16", "on_vs_off_exact": true, "on_vs_oracle": true, "off_vs_oracle": true, "on_first_diff": null, "off_first_diff": null, "on_diff_count": 0, "off_diff_count": 0}
+{"model": "tiny", "axis": "p16-t64", "on_vs_off_exact": false, "on_vs_oracle": false, "off_vs_oracle": false, "on_first_diff": 28, "off_first_diff": 28, "on_diff_count": 36, "off_diff_count": 36}
+{"model": "tiny", "axis": "p128-t16", "on_vs_off_exact": true, "on_vs_oracle": true, "off_vs_oracle": true, "on_first_diff": null, "off_first_diff": null, "on_diff_count": 0, "off_diff_count": 0}
+{"model": "tiny", "axis": "p128-t64", "on_vs_off_exact": true, "on_vs_oracle": true, "off_vs_oracle": true, "on_first_diff": null, "off_first_diff": null, "on_diff_count": 0, "off_diff_count": 0}
+{"model": "smol", "axis": "p16-t16", "on_vs_off_exact": true, "on_vs_oracle": false, "off_vs_oracle": false, "on_first_diff": 8, "off_first_diff": 8, "on_diff_count": 8, "off_diff_count": 8}
+{"model": "smol", "axis": "p16-t64", "on_vs_off_exact": true, "on_vs_oracle": false, "off_vs_oracle": false, "on_first_diff": 8, "off_first_diff": 8, "on_diff_count": 56, "off_diff_count": 56}
+{"model": "smol", "axis": "p128-t16", "on_vs_off_exact": true, "on_vs_oracle": true, "off_vs_oracle": true, "on_first_diff": null, "off_first_diff": null, "on_diff_count": 0, "off_diff_count": 0}
+{"model": "smol", "axis": "p128-t64", "on_vs_off_exact": true, "on_vs_oracle": true, "off_vs_oracle": true, "on_first_diff": null, "off_first_diff": null, "on_diff_count": 0, "off_diff_count": 0}
+[
+  {
+    "model": "tiny",
+    "axis": "p16-t16",
+    "on_vs_off_exact": true,
+    "on_vs_oracle": true,
+    "off_vs_oracle": true,
+    "on_first_diff": null,
+    "off_first_diff": null,
+    "on_diff_count": 0,
+    "off_diff_count": 0
+  },
+  {
+    "model": "tiny",
+    "axis": "p16-t64",
+    "on_vs_off_exact": false,
+    "on_vs_oracle": false,
+    "off_vs_oracle": false,
+    "on_first_diff": 28,
+    "off_first_diff": 28,
+    "on_diff_count": 36,
+    "off_diff_count": 36
+  },
+  {
+    "model": "tiny",
+    "axis": "p128-t16",
+    "on_vs_off_exact": true,
+    "on_vs_oracle": true,
+    "off_vs_oracle": true,
+    "on_first_diff": null,
+    "off_first_diff": null,
+    "on_diff_count": 0,
+    "off_diff_count": 0
+  },
+  {
+    "model": "tiny",
+    "axis": "p128-t64",
+    "on_vs_off_exact": true,
+    "on_vs_oracle": true,
+    "off_vs_oracle": true,
+    "on_first_diff": null,
+    "off_first_diff": null,
+    "on_diff_count": 0,
+    "off_diff_count": 0
+  },
+  {
+    "model": "smol",
+    "axis": "p16-t16",
+    "on_vs_off_exact": true,
+    "on_vs_oracle": false,
+    "off_vs_oracle": false,
+    "on_first_diff": 8,
+    "off_first_diff": 8,
+    "on_diff_count": 8,
+    "off_diff_count": 8
+  },
+  {
+    "model": "smol",
+    "axis": "p16-t64",
+    "on_vs_off_exact": true,
+    "on_vs_oracle": false,
+    "off_vs_oracle": false,
+    "on_first_diff": 8,
+    "off_first_diff": 8,
+    "on_diff_count": 56,
+    "off_diff_count": 56
+  },
+  {
+    "model": "smol",
+    "axis": "p128-t16",
+    "on_vs_off_exact": true,
+    "on_vs_oracle": true,
+    "off_vs_oracle": true,
+    "on_first_diff": null,
+    "off_first_diff": null,
+    "on_diff_count": 0,
+    "off_diff_count": 0
+  },
+  {
+    "model": "smol",
+    "axis": "p128-t64",
+    "on_vs_off_exact": true,
+    "on_vs_oracle": true,
+    "off_vs_oracle": true,
+    "on_first_diff": null,
+    "off_first_diff": null,
+    "on_diff_count": 0,
+    "off_diff_count": 0
+  }
+]

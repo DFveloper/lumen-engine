@@ -3,7 +3,10 @@
 ## Now
 
 SPEC. Issue: `ISSUE-LOCAL-01M653NJXDM6B5KE8VAA2VP93X`. Row:
-`BACKEND-CUDA-SM061`. Base: `780767bfd`. No implementation yet.
+`BACKEND-CUDA-SM061`. Base: `780767bfd`. The tiled lane, its focused tests,
+the sm60/sm61/sm70 compile matrix, the eight-axis gate, and the nsys trace are
+recorded in `.agents/evidence/pascal-volta-enable/kquant-prefill/`. Fresh review
+and operator gates remain open.
 
 ## Scope and design
 
@@ -50,6 +53,15 @@ The tiled lane changes the float reduction order relative to the generic
 kernel. Prefill output feeds the token gate, so the six exact axes must stay
 exact or the near-tie policy must be extended explicitly.
 
+Recorded deviation: the design note above suggests `Q8_1` activations. The
+implementation keeps the landed `BlockQ8_K` super-block instead. `Q8_1` would
+change the integer core relative to the CPU oracle and the generic lane, and the
+token gate requires the prefill path to stay under the landed `Q8_K` contract.
+The tile shape, config, and DP4A dot still mirror the oracle; only the
+activation encoding differs. Q6_K uses `DotQ6KPrefill`, which groups the same
+products as `scale * sum(dp4a)` instead of `sum(scale * product)`; both are exact
+int32, so the integer core and super-block float fold are unchanged.
+
 ## Tests and gates
 
 Add a registered `MatmulBTQuant` prefill regression at `m in {2, 16, 32, 128}`,
@@ -79,5 +91,6 @@ mismatch on an exact axis.
 
 ## Owed
 
-Implementation, red-before evidence, fresh review, and operator gates remain
-open.
+Implementation and red-before evidence are complete and recorded in
+`.agents/evidence/pascal-volta-enable/kquant-prefill/`. Fresh review, operator
+gates, and landing remain open.

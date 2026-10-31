@@ -2294,3 +2294,215 @@ TEST_CASE("Pascal Q4_K decode matches independently reconstructed GPU Q8_1 activ
   gpu.DestroyQueue(q);
 #endif
 }
+
+// BACKEND-CUDA-SM061: the tiled DP4A prefill lane for Q4_K/Q6_K (m > 1). The
+// tiled kernel stages a 64x64 weight/activation tile in shared memory and reuses
+// it across the tile, but consumes the SAME BlockQ8_K activation and the SAME
+// DotSuperblock integer core as the generic lane. So both lanes must meet the
+// CPU oracle at the tight NMSE band, and both must meet an f64 dequantized
+// reference at the ordinary quant band. RED-first: deleting the tiled dispatch
+// makes the tiled arm identical to the generic arm (both still pass here), which
+// is why the separate throughput case below is the dispatch-deletion RED.
+TEST_CASE("Pascal tiled K-quant prefill == CPU oracle and f64 dequant on both lanes") {
+#ifdef VLLM_CPP_CUDA
+  if (!HasCuda()) return;
+  cudaDeviceProp prop{};
+  REQUIRE(cudaGetDeviceProperties(&prop, 0) == cudaSuccess);
+  if (prop.major != 6) {
+    MESSAGE("not a Pascal device; tiled K-quant prefill gate skipped");
+    return;
+  }
+  Backend& gpu = vt::GetBackend(DeviceType::kCUDA);
+  Queue gq = gpu.CreateQueue();
+  Queue cq{Cpu(), nullptr};
+
+  auto decode_row = [](const WeightCase& c, const std::vector<uint8_t>& wq,
+                       int64_t row, int64_t k) {
+    std::vector<float> w(static_cast<size_t>(k));
+    const int64_t block_bytes = c.block_bytes;
+    const int64_t row_bytes = (k / c.block_elems) * block_bytes;
+    vt::cpu::BlockToFloat(c.dtype)(
+        wq.data() + static_cast<size_t>(row) * row_bytes, w.data(), k);
+    return w;
+  };
+
+  for (DType dt : {DType::kQ4_K, DType::kQ6_K}) {
+    const WeightCase& c = CaseFor(dt);
+    for (int64_t k : {int64_t{2048}, int64_t{5632}}) {
+      for (int64_t m : {int64_t{2}, int64_t{16}, int64_t{32}, int64_t{128}}) {
+        for (int64_t n : {int64_t{7}, int64_t{16}, int64_t{5632}}) {
+          CAPTURE(c.name);
+          CAPTURE(m);
+          CAPTURE(k);
+          CAPTURE(n);
+
+          const int64_t nblocks = n * (k / c.block_elems);
+          std::vector<uint8_t> wq = RandomBlocks(c, nblocks, 0x9A5CU);
+          std::vector<float> a(static_cast<size_t>(m * k));
+          GenerateData(0.75F, a.size(), a.data());
+
+          // CPU oracle.
+          std::vector<float> cpu_out(static_cast<size_t>(m * n), 0.0F);
+          {
+            Tensor at = Tensor::Contiguous(a.data(), DType::kF32, Cpu(), {m, k});
+            Tensor bt = Tensor::Contiguous(wq.data(), DType::kF32, Cpu(), {n, k});
+            bt.dtype = c.dtype;
+            Tensor ot =
+                Tensor::Contiguous(cpu_out.data(), DType::kF32, Cpu(), {m, n});
+            vt::MatmulBTQuant(cq, ot, at, bt);
+          }
+
+          auto run_lane = [&](bool tiled) {
+            if (tiled) unsetenv("VT_PASCAL_KQUANT_PREFILL");
+            else setenv("VT_PASCAL_KQUANT_PREFILL", "0", 1);
+            void* d_a = gpu.Alloc(a.size() * sizeof(float));
+            void* d_w = gpu.Alloc(wq.size());
+            void* d_o = gpu.Alloc(static_cast<size_t>(m * n) * sizeof(float));
+            gpu.Copy(gq, d_a, a.data(), a.size() * sizeof(float));
+            gpu.Copy(gq, d_w, wq.data(), wq.size());
+            Tensor at = DevTensor(d_a, DType::kF32, {m, k});
+            Tensor bt = DevTensor(d_w, c.dtype, {n, k});
+            Tensor ot = DevTensor(d_o, DType::kF32, {m, n});
+            vt::MatmulBTQuant(gq, ot, at, bt);
+            std::vector<float> out(static_cast<size_t>(m * n), 0.0F);
+            gpu.Copy(gq, out.data(), d_o, out.size() * sizeof(float));
+            gpu.Synchronize(gq);
+            gpu.Free(d_a);
+            gpu.Free(d_w);
+            gpu.Free(d_o);
+            return out;
+          };
+
+          std::vector<float> tiled = run_lane(true);
+          std::vector<float> generic = run_lane(false);
+          unsetenv("VT_PASCAL_KQUANT_PREFILL");
+
+          auto check_lane = [&](const std::vector<float>& got, const char* lane) {
+            CAPTURE(lane);
+            double num_cpu = 0, den_cpu = 0;
+            for (size_t idx = 0; idx < got.size(); ++idx) {
+              REQUIRE(std::isfinite(got[idx]));
+              const double d = double(got[idx]) - double(cpu_out[idx]);
+              num_cpu += d * d;
+              den_cpu += double(cpu_out[idx]) * double(cpu_out[idx]);
+            }
+            const double nmse_cpu = den_cpu > 0 ? num_cpu / den_cpu : num_cpu;
+            CAPTURE(nmse_cpu);
+            CHECK(nmse_cpu <= kMaxNmseVsCpu);
+
+            // f64 dequant reference: every output on the small shapes, a fixed
+            // spread of 64 outputs on the wide ones (a full wide decode is 30M
+            // weights and adds nothing the all-output CPU comparison lacks).
+            const bool full = m * n <= 4096;
+            const int64_t samples = full ? m * n : int64_t{64};
+            double num_ref = 0, den_ref = 0;
+            for (int64_t s = 0; s < samples; ++s) {
+              const int64_t i = full ? s / n : (s * 7) % m;
+              const int64_t j = full ? s % n : (s * 37) % n;
+              std::vector<float> wrow = decode_row(c, wq, j, k);
+              double ref = 0;
+              for (int64_t p = 0; p < k; ++p)
+                ref += double(a[static_cast<size_t>(i * k + p)]) *
+                       double(wrow[static_cast<size_t>(p)]);
+              const double got_v = got[static_cast<size_t>(i * n + j)];
+              num_ref += (got_v - ref) * (got_v - ref);
+              den_ref += ref * ref;
+            }
+            const double nmse_ref = den_ref > 0 ? num_ref / den_ref : num_ref;
+            CAPTURE(nmse_ref);
+            CHECK(nmse_ref <= kMaxNmseErr);
+          };
+
+          // The tiled lane must be BIT-IDENTICAL in its integer core but only
+          // reassociates the float scale sum, so it is held to the same bands
+          // as the generic lane. Compare the two lanes to each other too: that
+          // bound does not depend on the CPU oracle and catches a tile index
+          // slip that a shared near-tie band could hide.
+          double diff = 0, den = 0;
+          for (size_t idx = 0; idx < tiled.size(); ++idx) {
+            const double d = double(tiled[idx]) - double(generic[idx]);
+            diff += d * d;
+            den += double(generic[idx]) * double(generic[idx]);
+          }
+          CHECK((den > 0 ? diff / den : diff) <= kMaxNmseVsCpu);
+
+          check_lane(tiled, "tiled");
+          check_lane(generic, "generic");
+        }
+      }
+    }
+  }
+  gpu.DestroyQueue(gq);
+#endif
+}
+
+// BACKEND-CUDA-SM061 throughput regression. The tiled lane exists to make the
+// prefill faster, so a same-binary warmed A/B must show a substantial win. The
+// RED is deleting the tiled dispatch: both arms then run the generic kernel and
+// the ratio collapses to ~1. Skipped off Pascal, where the tiled lane is
+// deliberately unreachable.
+TEST_CASE("Pascal tiled K-quant prefill is substantially faster than the generic lane") {
+#ifdef VLLM_CPP_CUDA
+  if (!HasCuda()) return;
+  cudaDeviceProp prop{};
+  REQUIRE(cudaGetDeviceProperties(&prop, 0) == cudaSuccess);
+  if (prop.major != 6) {
+    MESSAGE("not a Pascal device; tiled K-quant throughput gate skipped");
+    return;
+  }
+  Backend& gpu = vt::GetBackend(DeviceType::kCUDA);
+  Queue gq = gpu.CreateQueue();
+
+  constexpr int64_t m = 32, n = 5632, k = 5632;
+  for (DType dt : {DType::kQ4_K, DType::kQ6_K}) {
+    const WeightCase& c = CaseFor(dt);
+    CAPTURE(c.name);
+    std::vector<uint8_t> wq = RandomBlocks(c, n * (k / c.block_elems), 0x51EEU);
+    std::vector<float> a(static_cast<size_t>(m * k));
+    GenerateData(0.5F, a.size(), a.data());
+
+    void* d_a = gpu.Alloc(a.size() * sizeof(float));
+    void* d_w = gpu.Alloc(wq.size());
+    void* d_o = gpu.Alloc(static_cast<size_t>(m * n) * sizeof(float));
+    gpu.Copy(gq, d_a, a.data(), a.size() * sizeof(float));
+    gpu.Copy(gq, d_w, wq.data(), wq.size());
+    Tensor at = DevTensor(d_a, DType::kF32, {m, k});
+    Tensor bt = DevTensor(d_w, c.dtype, {n, k});
+    Tensor ot = DevTensor(d_o, DType::kF32, {m, n});
+
+    auto best_ms = [&](bool tiled) {
+      if (tiled) unsetenv("VT_PASCAL_KQUANT_PREFILL");
+      else setenv("VT_PASCAL_KQUANT_PREFILL", "0", 1);
+      double best = 1e30;
+      for (int rep = 0; rep < 5; ++rep) {
+        cudaEvent_t e0, e1;
+        REQUIRE(cudaEventCreate(&e0) == cudaSuccess);
+        REQUIRE(cudaEventCreate(&e1) == cudaSuccess);
+        REQUIRE(cudaEventRecord(e0, nullptr) == cudaSuccess);
+        vt::MatmulBTQuant(gq, ot, at, bt);
+        REQUIRE(cudaEventRecord(e1, nullptr) == cudaSuccess);
+        REQUIRE(cudaEventSynchronize(e1) == cudaSuccess);
+        float ms = 0;
+        REQUIRE(cudaEventElapsedTime(&ms, e0, e1) == cudaSuccess);
+        cudaEventDestroy(e0);
+        cudaEventDestroy(e1);
+        if (rep > 0) best = std::min(best, double(ms));  // first rep warms
+      }
+      return best;
+    };
+
+    const double generic_ms = best_ms(false);
+    const double tiled_ms = best_ms(true);
+    unsetenv("VT_PASCAL_KQUANT_PREFILL");
+    gpu.Free(d_a);
+    gpu.Free(d_w);
+    gpu.Free(d_o);
+
+    CAPTURE(generic_ms);
+    CAPTURE(tiled_ms);
+    CHECK(tiled_ms > 0);
+    CHECK(tiled_ms < generic_ms / 1.5);
+  }
+  gpu.DestroyQueue(gq);
+#endif
+}

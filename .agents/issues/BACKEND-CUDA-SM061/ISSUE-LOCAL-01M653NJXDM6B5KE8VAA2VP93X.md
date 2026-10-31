@@ -16,4 +16,11 @@ The generic K-quant prefill GEMM maps one warp per output row and re-reads each 
 
 ## Resolution
 
--
+- 2026-10-30: implementation and gates recorded in
+  `.agents/evidence/pascal-volta-enable/kquant-prefill/`; not landed. Focused
+  quant suite passes (23 cases, 8308113 assertions, GLM geometry excluded for
+  the 2 GB P620), `test_ops_quant_dot` passes 34/34, and `cuda_quant_dot.cu`
+  compiles for sm60/sm61/sm70. TinyLlama p16 prefill kernel time falls from
+  609.1 ms to 170.0 ms (3.58x). Every oracle-exact axis is unchanged; the only
+  arm difference is in the tail after the documented TinyLlama p16/t64 step-28
+  near-tie. Fresh review and operator gates remain open.

@@ -208,6 +208,17 @@ void MatmulBT(Queue& q, Tensor& out, const Tensor& a, const Tensor& b) {
   }
   VT_CHECK(a.rank == 2 && b.rank == 2 && out.rank == 2, "matmul_bt: rank-2 tensors required");
   VT_CHECK(a.shape[1] == b.shape[1], "matmul_bt: inner dims mismatch (b is [N,K])");
+  fprintf(stderr,
+    "[MatmulBT] A=[%lld,%lld] "
+    "B=[%lld,%lld] "
+    "OUT=[%lld,%lld]\n",
+    (long long)a.shape[0],
+    (long long)a.shape[1],
+    (long long)b.shape[0],
+    (long long)b.shape[1],
+    (long long)out.shape[0],
+    (long long)out.shape[1]
+  );
   VT_CHECK(out.shape[0] == a.shape[0] && out.shape[1] == b.shape[0],
            "matmul_bt: output shape mismatch");
   VT_CHECK(IsFloat(a.dtype) && IsFloat(b.dtype) && IsScalarFloat(out.dtype, OpId::kMatmulBT, q),

@@ -2536,6 +2536,7 @@ void MatmulQ8_0GroupedCuda(Tensor& out, const Tensor& act_t, const Tensor& weigh
 #include "cuda_pascal_q6_decode.cuh"
 #include "cuda_pascal_q4k_decode.cuh"
 #include "cuda_pascal_mmq_d4.cuh"
+#include "cuda_pascal_kquant_prefill.cuh"
 
 // The kCUDA provider for OpId::kMatmulBTQuant. Validation already done by
 // vt::MatmulBTQuant (ops.cpp) before dispatch; this mirrors the CPU kernel's
@@ -2636,6 +2637,25 @@ void MatmulBTQuantKernelCuda(Queue& q, Tensor& out, const Tensor& a,
 
   // 2. The integer dot GEMM (one warp per output), dequant-in-kernel.
   const uint8_t* weight = static_cast<const uint8_t*>(b.data);
+
+  // BACKEND-CUDA-SM061: the tiled DP4A prefill lane for Q4_K/Q6_K. Same Q8_K
+  // activation bytes and the same DotSuperblock integer core as the generic
+  // lane below, but the weight/activation tiles are staged once per K iteration
+  // and reused across the tile. Decode (m == 1), other dtypes, Volta and newer
+  // GPUs keep the generic lane.
+  if (PascalKQuantPrefillEnabled() &&
+      IsPascalKQuantPrefillEligible(out, a, b, nsb)) {
+    if (b.dtype == DType::kQ4_K) {
+      LaunchPascalKQuantPrefill<WType::kQ4_K>(out, weight, act, m, n, nsb,
+                                             w_row_bytes, s);
+    } else {
+      LaunchPascalKQuantPrefill<WType::kQ6_K>(out, weight, act, m, n, nsb,
+                                             w_row_bytes, s);
+    }
+    CheckCuda(cudaGetLastError(), "matmul_bt_quant Pascal K-quant prefill launch");
+    return;
+  }
+
   switch (w) {
     case WType::kIQ2_XXS: LaunchGemm<WType::kIQ2_XXS>(out, weight, act, m, n, nsb, w_row_bytes, w_block_bytes, s); break;
     case WType::kIQ3_XXS: LaunchGemm<WType::kIQ3_XXS>(out, weight, act, m, n, nsb, w_row_bytes, w_block_bytes, s); break;

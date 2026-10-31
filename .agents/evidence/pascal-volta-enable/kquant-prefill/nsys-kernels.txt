@@ -1,0 +1,9 @@
+TinyLlama p16, 16 generated tokens, P620 sm_61. Kernel totals from CUPTI.
+
+== VT_PASCAL_KQUANT_PREFILL=0 (generic) ==
+void vt::cuda::<unnamed>::QuantDotGemmKernel<(vt::cuda::<unnamed>::WType)4, unsigned short>(T2 *, const unsigned char *, const vt::cpu::BlockQ8_K *, long, long, long, unsigned long, unsigned long)|134|409.162
+void vt::cuda::<unnamed>::QuantDotGemmKernel<(vt::cuda::<unnamed>::WType)6, unsigned short>(T2 *, const unsigned char *, const vt::cpu::BlockQ8_K *, long, long, long, unsigned long, unsigned long)|20|199.970
+
+== default (tiled) ==
+void vt::cuda::<unnamed>::<unnamed>::PascalKQuantPrefillKernel<(vt::cuda::<unnamed>::WType)4, unsigned short>(T2 *, const unsigned char *, const vt::cpu::BlockQ8_K *, long, long, long, unsigned long)|134|129.102
+void vt::cuda::<unnamed>::<unnamed>::PascalKQuantPrefillKernel<(vt::cuda::<unnamed>::WType)6, unsigned short>(T2 *, const unsigned char *, const vt::cpu::BlockQ8_K *, long, long, long, unsigned long)|20|40.883
