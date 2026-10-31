@@ -706,7 +706,7 @@ TEST_CASE("G5 AVX2 K-quant tier is selectable and matches the portable tier") {
   // case there runs at m=1,n=1, where IQ3_S's dot can cancel near zero and its
   // unmutated NMSE is already ~1.10, so adding the row would fail that case.
   // The q4_K and q6_K entries copy `kWeightCases` unchanged. IQ3_S's block is
-  // `d@0 qs@2 qh@66 scales@74 signs@78` (110 bytes).
+  // `d@0 qs@2 qh@66 signs@74 scales@106` (110 bytes).
   const WeightCase kG5WeightCases[] = {
       {vt::DType::kQ4_K, 256, 144, 0, 2, -1, "q4_K"},
       {vt::DType::kQ6_K, 256, 210, 208, -1, -1, "q6_K"},
