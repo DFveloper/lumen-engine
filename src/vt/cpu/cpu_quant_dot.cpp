@@ -1233,6 +1233,28 @@ void VecDotTQ1_0Q8_K(int n, float* s, size_t bs, const void* vx, size_t bx,
   *s = sumf;
 }
 
+// QUANT-GGUF-CIQ-GEMM G5: the three encodings with an AVX2 arm dispatch through
+// the runtime probe; every other dtype keeps its existing selection. Off
+// x86-64 the AVX2 translation unit is not linked, so the portable kernel is the
+// answer without a runtime check.
+inline VecDotFn SelectKQuantVecDot(DType dtype, VecDotFn portable) {
+#if defined(__x86_64__) || defined(_M_X64)
+  return SelectQuantKVecDot(dtype, portable);
+#else
+  (void)dtype;
+  return portable;
+#endif
+}
+
+VecDotFn QuantKPortableVecDot(DType dtype) {
+  switch (dtype) {
+    case DType::kQ4_K: return &VecDotQ4_KQ8_K;
+    case DType::kQ6_K: return &VecDotQ6_KQ8_K;
+    case DType::kIQ3_S: return &VecDotIQ3_SQ8_K;
+    default: return nullptr;
+  }
+}
+
 VecDotFn BlockVecDot(DType dtype) {
   switch (dtype) {
     case DType::kQ4_0: return &VecDotQ4_0Q8_0;        // quants.c:174
@@ -1242,11 +1264,14 @@ VecDotFn BlockVecDot(DType dtype) {
       return SelectQuantQ8VecDot(&VecDotQ8_0Q8_0);  // quants.c:400 + A76 tier
     case DType::kQ2_K: return &VecDotQ2_KQ8_K;        // quants.c:514
     case DType::kQ3_K: return &VecDotQ3_KQ8_K;        // quants.c:566
-    case DType::kQ4_K: return &VecDotQ4_KQ8_K;        // quants.c:645
+    case DType::kQ4_K:
+      return SelectKQuantVecDot(dtype, &VecDotQ4_KQ8_K);  // quants.c:645 + G5
     case DType::kQ5_K: return &VecDotQ5_KQ8_K;        // quants.c:720
-    case DType::kQ6_K: return &VecDotQ6_KQ8_K;        // quants.c:800
+    case DType::kQ6_K:
+      return SelectKQuantVecDot(dtype, &VecDotQ6_KQ8_K);  // quants.c:800 + G5
     case DType::kIQ2_XXS: return &VecDotIQ2_XXSQ8_K;  // quants.c:855
-    case DType::kIQ3_S: return &VecDotIQ3_SQ8_K;      // quants.c:1094
+    case DType::kIQ3_S:
+      return SelectKQuantVecDot(dtype, &VecDotIQ3_SQ8_K);  // quants.c:1094 + G5
     case DType::kIQ3_XXS: return &VecDotIQ3_XXSQ8_K;  // quants.c:999
     case DType::kIQ2_S: return &VecDotIQ2_SQ8_K;      // quants.c:947
     case DType::kIQ2_XS: return &VecDotIQ2_XSQ8_K;    // b10451 quants.c:948
