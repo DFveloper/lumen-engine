@@ -14,8 +14,11 @@ multimodal inputs are outside this repair.
 
 ## Now
 
-Design committed before implementation. The model row retains its existing
-lifecycle. This repair does not complete the row's outstanding multimodal gates.
+Implementation and focused regression tests pass. The supplied original CLI
+workload and the BOS-prefixed workload each match the installed llama.cpp for
+16 greedy output tokens. Independent review and final integrated verification
+are recorded below. The model row retains its existing lifecycle. This repair
+does not complete the row's outstanding multimodal gates.
 
 ## Reference and authority
 
@@ -117,7 +120,46 @@ Draft against `localai-org/vllm.cpp`. Do not merge or change shared main.
 
 ## Outcome
 
-Pending implementation, independent review and operator verification.
+The CPU loader accepts the supplied mixed INT4/INT8 repack. It reverses packed
+codes into native Q4_0/Q8_0 blocks and copies F16 scales without requantization.
+Marlin padding remains present because it is zero and matches the configuration.
+The model keeps its existing BF16 compute stream. Its F16 embedding table stays
+F16 to avoid an additional table-wide rounding step and preserve tied-head values.
+
+The production-path fixture originally failed at F16 loading. Its next failure
+exposed the missing shared CPU dual RMSNorm composite. The final fixture passes
+10 cases and 2305 assertions. Ten focused regression suites pass. The compact
+versus independent dense reference has maximum logit difference 0.0217895508
+under the declared 0.05 bound. Removing selected expert contributions changes
+logits by 0.599716187. This bound accounts for native Q8 activation quantization;
+it is not a claim of bit-exact dense logits.
+
+The first real run found a per-layer V selection defect. The configuration's
+global sharing flag is not sufficient: sliding layers carry explicit V weights,
+while full layers omit them. The loader now resolves each layer by actual V
+tensor presence. Tests cover packed V, ignored plain V and genuinely absent V.
+
+The corrected public API run with prompt IDs `[2, 9259]` matches all 16 greedy
+llama.cpp tokens. Logits remain numerically different: first-step maximum
+absolute difference 0.7660825 and RMSE 0.1840848; across all steps, maximum
+absolute difference 8.0060387 and RMSE 0.8178846. This establishes the specified
+token gate only. It does not establish general logits or performance parity.
+
+The original public CLI tokenizes raw `Hello` without BOS, producing `[9259]`.
+Its corrected 16-token output is `Hello` repeated 16 times. The installed
+llama.cpp with the identical no-BOS input produces the identical IDs and text.
+Both commands exit zero. Repetition is observed on both engines; this repair
+does not alter tokenizer policy or the original checkpoint.
+
+Fresh review found and separate implementers repaired three additional gaps:
+unasserted no-epilogue QKV products, unchecked dual-normalization scratch size,
+and silently accepted unsupported KV-cache quantization. Negative mutations
+detect each repair. The CPU CT reader refuses non-null KV quantization rather
+than ignoring unconsumed scales. Missing and null declarations remain valid.
+
+The separate upstream PR is Draft number 3540 in `localai-org/vllm.cpp`.
+The developer subsequently authorizes landing in the fork main and pulling
+upstream main. Those integration actions require final recorded verification.
 
 ## Comparator evidence: 1 November 2026
 
@@ -168,13 +210,14 @@ Raw comparator command, exit 0:
 ```
 
 These timings establish execution only. They are not performance measurements.
-The implementing engine's real-model numerical comparison remains pending.
+The implementing engine's specified 16-token comparison passes as recorded in
+Outcome. Wider prompts and performance measurements remain outside this repair.
 
 ## Owed
 
-- Connect the staged shared GeGLU descriptor to the production Gemma4 CT loader
-  and registered forward in this PR, then complete the declared tests, fresh
-  review and operator verification. The owning issue is listed in Ownership.
+- Final integrated build, fresh review and operator verification evidence before
+  the authorized fork landing. The owning issues are listed in Ownership and
+  the in-flow CPU composition section.
 
 ## In-flow CPU composition defect
 
