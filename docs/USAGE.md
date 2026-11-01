@@ -1655,7 +1655,8 @@ Marlin padding remains zero; the loader does not infer or remove padding.
 
 The local validation artifacts are listed below. No HuggingFace repository or
 revision was supplied for these repacks; their content hashes identify them.
-Real-checkpoint token and performance comparison remains pending.
+The two supplied artifacts match for the recorded 16-token greedy CPU workloads.
+This result does not establish bit-exact logits or performance parity.
 
 | Arm | Local file | Size in bytes | SHA256 |
 |---|---|---:|---|
