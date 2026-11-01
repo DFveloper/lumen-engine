@@ -175,3 +175,17 @@ The implementing engine's real-model numerical comparison remains pending.
 - `ISSUE-LOCAL-01M6AS6AFMM9G0D76SKPJGT9SH`: connect the staged shared GeGLU
   descriptor to the production Gemma4 CT loader and registered forward in this
   PR, then complete the declared tests, fresh review and operator verification.
+
+## In-flow CPU composition defect
+
+`ISSUE-LOCAL-01M6AV8N13FD188YMN1TN3N8CN` records the production fixture's next
+failure: `vt::DualRmsNormPlusRes` throws on CPU. The Gemma4 MoE forward already
+calls this shared operation. Repair its CPU composite instead of bypassing the
+shared fusion surface. Preserve the mathematical order:
+`RmsNorm(RmsNorm(x1,w1) + RmsNorm(x2,w2),w3) + residual`.
+Use existing operations with explicit intermediate dtype rounding and bounded
+scratch lifetime. Retain the ROCm provider and other backend refusal behavior.
+Test BF16 and F32 against the composed reference, nonzero residual, distinct
+weights and inputs, output alias behavior, and malformed tensors. Mutate the
+normalization order and residual addition. The registered Gemma4 production
+fixture must fail without this call and pass with the CPU composite.
