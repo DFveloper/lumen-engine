@@ -118,3 +118,60 @@ Draft against `localai-org/vllm.cpp`. Do not merge or change shared main.
 ## Outcome
 
 Pending implementation, independent review and operator verification.
+
+## Comparator evidence: 1 November 2026
+
+The original GGUF sha256 is
+`f8428df24ae3961c98ac4137c7cb47c1b6326a45690aa3677601fe2d70b1c69c`.
+The CT safetensors sha256 is
+`1ec184294c1fda2cfe6281f600478f6fd31b87b23d56aff39dd1f89e455792d8`.
+The converter sha256 is
+`f3c73977c0fcc14b44c29078c181f1bed1aad3c2093bd6cd118e7b6cc381d572`.
+These are local developer-supplied artifacts. Their original publisher revision
+is unavailable. No HuggingFace revision is inferred from their file names.
+
+The installed llama.cpp library identifies commit
+`36a623af60241c1bf31b20ee94aa086261563349`, build 12164. Its sha256 is
+`817cefbaa1aec4d6869d0ef884dad26d81b059e21146e6a8f0257d01d1df97f1`.
+The raw completion binary sha256 is
+`bb1610e0ed8f98a3d75ea74d4c028eea939269a480a40572f994986cd68f7638`.
+A public-API diagnostic uses headers archived from that exact object because
+current checkout headers have a different context-parameter ABI.
+
+The numerical repack check covers 39 tensor/expert samples and 156 rows across
+layers 0, 11 and 29 and experts 0, 57 and 115. All sampled codes and F16 scale
+bits match. Maximum sampled dequantized difference is zero. Dense and expert
+Marlin padding contains zero values. Embeddings match GGUF dequantization
+rounded to F16, with maximum sampled rounding difference 0.000030517578125.
+Converting the F16 embedding table to BF16 adds avoidable rounding, so preserve
+the F16 table and use converting lookup operations.
+
+The original GGUF executed on CPU with four threads, context 2048, batch 32,
+ubatch 32, F16 KV, flash attention enabled and weight repacking enabled.
+Raw `Hello` tokenizes to `[2, 9259]`. Sixteen greedy output IDs are
+`[2180, 236786, 31048, 236786, 31048, 236786, 31048, 236786,
+31048, 236786, 31048, 236786, 31048, 236786, 31048, 236786]`.
+The diagnostic matches `llama-completion` output. Its 16 by 262144 float32
+logits capture has sha256
+`83a48a2355f6370f2db595aec70edb97cc030bd1dc1691d43794d7bc3aa83b3a`.
+The modern `llama-cli` applied conversation formatting despite the requested
+raw mode, so its earlier eight-token output is not the matched comparison.
+
+Raw comparator command, exit 0:
+
+```sh
+~/aikar-engine/build/bin/llama-completion \
+  -m /mnt/openwebui/AIKAR/Lumen-3.1-Pulsar/Lumen-3.5-Pulsar_S-LD-Q4_0_XL.gguf \
+  -ngl 0 -t 4 -c 2048 -b 32 -ub 32 -n 16 -p Hello \
+  --temp 0 --seed 1 --no-conversation --single-turn --no-warmup \
+  --verbose-prompt --simple-io
+```
+
+These timings establish execution only. They are not performance measurements.
+The implementing engine's real-model numerical comparison remains pending.
+
+## Owed
+
+- `ISSUE-LOCAL-01M6AS6AFMM9G0D76SKPJGT9SH`: connect the staged shared GeGLU
+  descriptor to the production Gemma4 CT loader and registered forward in this
+  PR, then complete the declared tests, fresh review and operator verification.
