@@ -343,7 +343,7 @@ using vt::cpu::PagedAttnKDotBfDot;
   auto run = [&](auto kv_tag) {
     ParallelForRows(CurrentThreadpool(), total_q * hq, [&](int64_t i0, int64_t i1) {
       std::vector<float> probs;
-      std::vector<float> acc(static_cast<size_t>(d));
+      std::vector<float> acc(static_cast<size_t>(d_v));
       // The token's whole query row (hq*d contiguous elements), widened once and
       // reused by every q-head of that token in this chunk. Unused (and unsized)
       // when the query is already f32. Flat index order is monotone in t, so one

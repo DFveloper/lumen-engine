@@ -202,6 +202,15 @@ vllm_cpp_add_test(test_kolibri1_gguf vllm/models/test_kolibri1_gguf.cpp)
 target_include_directories(test_kolibri1_gguf PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_compile_definitions(test_kolibri1_gguf PRIVATE
   KOLIBRI1_GOLDENS="${CMAKE_CURRENT_SOURCE_DIR}/vllm/models/kolibri1_goldens.json")
+# The container under test is a build choice, not a code choice: the gate is
+# the SAME harness against whichever kolibri1 GGUF is mounted (the Hob-forge
+# Q2_K by default; the mudler APEX tiers via -DKOLIBRI1_GGUF_PATH=...).
+set(KOLIBRI1_GGUF_PATH "" CACHE STRING
+    "Path to the kolibri1 GGUF container the gguf gate loads")
+if(KOLIBRI1_GGUF_PATH)
+  target_compile_definitions(test_kolibri1_gguf PRIVATE
+    KOLIBRI1_GGUF_PATH="${KOLIBRI1_GGUF_PATH}")
+endif()
 vllm_cpp_add_test(test_kolibri1_decode_bench vllm/models/test_kolibri1_decode_bench.cpp)
 target_include_directories(test_kolibri1_decode_bench PRIVATE ${CMAKE_SOURCE_DIR}/src)
 # Kolibri-1 three-way numerics capture (row/kolibri-three-way): inert without
@@ -3484,6 +3493,10 @@ vllm_cpp_add_test(test_ops_embedding_quant vt/test_ops_embedding_quant.cpp)
 # header (SwapForTesting) used by the thread-count determinism case. CPU-only.
 vllm_cpp_add_test(test_ops_quant_dot vt/test_ops_quant_dot.cpp)
 target_include_directories(test_ops_quant_dot PRIVATE ${CMAKE_SOURCE_DIR}/src)
+# FLINT-NEON-Q4K-DOT: the NEON Q4_K x Q8_K dot bit-identity suite. The TU
+# includes cpu_quant_blocks.h from src/, hence the same private include.
+vllm_cpp_add_test(test_neon_q4k_dot vt/test_neon_q4k_dot.cpp)
+target_include_directories(test_neon_q4k_dot PRIVATE ${CMAKE_SOURCE_DIR}/src)
 # MODEL-DSV4-EXL3 W1a: the EXL3 (exllamav3) trellis reference dequant. Gated by
 # tiles the TEST packs itself off the ENCODE side (tests/test_quant_fn.py:83-128
 # + pack.cu:29-57), so the fixture never shares code with the decode under test,
