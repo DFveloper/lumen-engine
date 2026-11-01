@@ -491,6 +491,114 @@ std::vector<std::vector<uint8_t>> RunBattery(Threadpool& pool) {
     vt::PagedAttention(q, to, tq, tkc, tvc, tbt, tsl, tqsl, args);
     outs.push_back(Bytes(out.data(), out.size() * sizeof(float)));
   }
+  // PagedAttention decode: ONE query token and eight q-heads over two kv-heads.
+  // The kernel splits the flat (token, q-head) output range, so this shape
+  // hands the pool eight independent work items where the prefill case above
+  // hands it one query row. Fifteen keys (the query plus fourteen past
+  // positions) span four pages through a NON-identity block table, so a head
+  // pair that reads another q-head, or a q/kv head mapping off by one, changes
+  // the bytes; a split extent one head short leaves the last head unwritten.
+  {
+    const float kSentinel = std::numeric_limits<float>::quiet_NaN();
+    const int64_t T = 1, Hq = 8, Hk = 2, D = 16, bs = 4;
+    const int64_t seqlen = 15;                    // the query plus 14 context keys
+    const int64_t nblocks = (seqlen + bs - 1) / bs;  // 4
+    std::vector<float> query(T * Hq * D), out(T * Hq * D, kSentinel);
+    std::vector<float> kc(nblocks * bs * Hk * D), vc(nblocks * bs * Hk * D);
+    FillF32(query, 45);
+    FillF32(kc, 46);
+    FillF32(vc, 47);
+    std::vector<int32_t> block_table = {2, 0, 3, 1};  // j -> a non-identity page
+    std::vector<int32_t> seq_lens = {static_cast<int32_t>(seqlen)};
+    std::vector<int32_t> qsl = {0, static_cast<int32_t>(T)};
+    Tensor tq = Tensor::Contiguous(query.data(), DType::kF32, Cpu(), {T, Hq, D});
+    Tensor tkc = Tensor::Contiguous(kc.data(), DType::kF32, Cpu(), {nblocks, bs, Hk, D});
+    Tensor tvc = Tensor::Contiguous(vc.data(), DType::kF32, Cpu(), {nblocks, bs, Hk, D});
+    Tensor tbt = Tensor::Contiguous(block_table.data(), DType::kI32, Cpu(), {1, nblocks});
+    Tensor tsl = Tensor::Contiguous(seq_lens.data(), DType::kI32, Cpu(), {1});
+    Tensor tqsl = Tensor::Contiguous(qsl.data(), DType::kI32, Cpu(), {2});
+    Tensor to = Tensor::Contiguous(out.data(), DType::kF32, Cpu(), {T, Hq, D});
+    vt::PagedAttentionArgs args;
+    args.scale = 0.353553f;
+    args.causal = true;
+    vt::PagedAttention(q, to, tq, tkc, tvc, tbt, tsl, tqsl, args);
+    CHECK(Unwritten(out) == 0);
+    outs.push_back(Bytes(out.data(), out.size() * sizeof(float)));
+  }
+  // The same decode through a left sliding window (the gemma-4 shape): p = 14
+  // with window_size (5, 0) keeps keys 9..14, so the window bound lands inside
+  // the four-page span the block table above permutes.
+  {
+    const float kSentinel = std::numeric_limits<float>::quiet_NaN();
+    const int64_t T = 1, Hq = 8, Hk = 2, D = 16, bs = 4;
+    const int64_t seqlen = 15;
+    const int64_t nblocks = (seqlen + bs - 1) / bs;
+    std::vector<float> query(T * Hq * D), out(T * Hq * D, kSentinel);
+    std::vector<float> kc(nblocks * bs * Hk * D), vc(nblocks * bs * Hk * D);
+    FillF32(query, 48);
+    FillF32(kc, 49);
+    FillF32(vc, 50);
+    std::vector<int32_t> block_table = {1, 3, 0, 2};
+    std::vector<int32_t> seq_lens = {static_cast<int32_t>(seqlen)};
+    std::vector<int32_t> qsl = {0, static_cast<int32_t>(T)};
+    Tensor tq = Tensor::Contiguous(query.data(), DType::kF32, Cpu(), {T, Hq, D});
+    Tensor tkc = Tensor::Contiguous(kc.data(), DType::kF32, Cpu(), {nblocks, bs, Hk, D});
+    Tensor tvc = Tensor::Contiguous(vc.data(), DType::kF32, Cpu(), {nblocks, bs, Hk, D});
+    Tensor tbt = Tensor::Contiguous(block_table.data(), DType::kI32, Cpu(), {1, nblocks});
+    Tensor tsl = Tensor::Contiguous(seq_lens.data(), DType::kI32, Cpu(), {1});
+    Tensor tqsl = Tensor::Contiguous(qsl.data(), DType::kI32, Cpu(), {2});
+    Tensor to = Tensor::Contiguous(out.data(), DType::kF32, Cpu(), {T, Hq, D});
+    vt::PagedAttentionArgs args;
+    args.scale = 0.353553f;
+    args.causal = true;
+    args.window_size = vt::AttentionWindow{5, 0};
+    vt::PagedAttention(q, to, tq, tkc, tvc, tbt, tsl, tqsl, args);
+    CHECK(Unwritten(out) == 0);
+    outs.push_back(Bytes(out.data(), out.size() * sizeof(float)));
+  }
+  // The query row is widened once per token and cached across the heads of
+  // that token inside one chunk. A chunk wider than a token is the only shape
+  // that can reuse a stale row, and at one thread the whole range is a single
+  // chunk. The reference is the same query already widened to f32, which skips
+  // the cache entirely, so a cache key that never advances changes bytes here
+  // at every pool size, and a head offset inside the row changes them too.
+  {
+    const int64_t T = 40, Hq = 8, Hk = 2, D = 8, bs = 4;
+    const int64_t nblocks = (T + bs - 1) / bs;  // 10
+    std::vector<float> qf(T * Hq * D), kc(nblocks * bs * Hk * D), vc(nblocks * bs * Hk * D);
+    std::vector<uint16_t> qb(T * Hq * D);
+    FillF32(qf, 51);
+    FillF32(kc, 52);
+    FillF32(vc, 53);
+    for (size_t i = 0; i < qf.size(); ++i) {
+      qb[i] = vt::F32ToBF16(qf[i]);
+      qf[i] = vt::BF16ToF32(qb[i]);  // exactly what the widen path produces
+    }
+    std::vector<int32_t> block_table(nblocks);
+    for (int64_t b = 0; b < nblocks; ++b)
+      block_table[static_cast<size_t>(b)] = static_cast<int32_t>(b);
+    std::vector<int32_t> seq_lens = {static_cast<int32_t>(T)};
+    std::vector<int32_t> qsl = {0, static_cast<int32_t>(T)};
+    std::vector<float> out_bf(T * Hq * D), out_f32(T * Hq * D);
+    Tensor tkc = Tensor::Contiguous(kc.data(), DType::kF32, Cpu(), {nblocks, bs, Hk, D});
+    Tensor tvc = Tensor::Contiguous(vc.data(), DType::kF32, Cpu(), {nblocks, bs, Hk, D});
+    Tensor tbt = Tensor::Contiguous(block_table.data(), DType::kI32, Cpu(), {1, nblocks});
+    Tensor tsl = Tensor::Contiguous(seq_lens.data(), DType::kI32, Cpu(), {1});
+    Tensor tqsl = Tensor::Contiguous(qsl.data(), DType::kI32, Cpu(), {2});
+    vt::PagedAttentionArgs args;
+    args.scale = 0.353553f;
+    args.causal = true;
+    Tensor tqb = Tensor::Contiguous(qb.data(), DType::kBF16, Cpu(), {T, Hq, D});
+    Tensor tqf = Tensor::Contiguous(qf.data(), DType::kF32, Cpu(), {T, Hq, D});
+    Tensor tob = Tensor::Contiguous(out_bf.data(), DType::kF32, Cpu(), {T, Hq, D});
+    Tensor tof = Tensor::Contiguous(out_f32.data(), DType::kF32, Cpu(), {T, Hq, D});
+    vt::PagedAttention(q, tob, tqb, tkc, tvc, tbt, tsl, tqsl, args);
+    vt::PagedAttention(q, tof, tqf, tkc, tvc, tbt, tsl, tqsl, args);
+    CHECK_MESSAGE(std::memcmp(out_bf.data(), out_f32.data(),
+                              out_bf.size() * sizeof(float)) == 0,
+                  "bf16 query row diverges from the pre-widened f32 row");
+    outs.push_back(Bytes(out_bf.data(), out_bf.size() * sizeof(float)));
+  }
   // MoeRouterTopK t=29, E=16, k=4 (renormalize).
   {
     std::vector<float> logits(29 * 16), weights(29 * 4);
