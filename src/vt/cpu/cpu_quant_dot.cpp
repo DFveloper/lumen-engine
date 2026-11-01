@@ -1255,6 +1255,11 @@ VecDotFn QuantKPortableVecDot(DType dtype) {
   }
 }
 
+// FLINT-NEON-Q4K-DOT: the TRUE scalar reference for the Q4_K x Q8_K dot,
+// immune to the VT_CPU_Q4K_DOT selection (see the quant.h comment beside
+// SelectQuantQ4KVecDot).
+VecDotFn QuantQ4KPortableVecDot() { return &VecDotQ4_KQ8_K; }
+
 VecDotFn BlockVecDot(DType dtype) {
   switch (dtype) {
     case DType::kQ4_0: return &VecDotQ4_0Q8_0;        // quants.c:174
@@ -1265,7 +1270,7 @@ VecDotFn BlockVecDot(DType dtype) {
     case DType::kQ2_K: return &VecDotQ2_KQ8_K;        // quants.c:514
     case DType::kQ3_K: return &VecDotQ3_KQ8_K;        // quants.c:566
     case DType::kQ4_K:
-      return SelectKQuantVecDot(dtype, &VecDotQ4_KQ8_K);  // quants.c:645 + G5
+      return SelectKQuantVecDot(dtype, SelectQuantQ4KVecDot(&VecDotQ4_KQ8_K));  // AVX2 on x86, NEON on Arm
     case DType::kQ5_K: return &VecDotQ5_KQ8_K;        // quants.c:720
     case DType::kQ6_K:
       return SelectKQuantVecDot(dtype, &VecDotQ6_KQ8_K);  // quants.c:800 + G5
