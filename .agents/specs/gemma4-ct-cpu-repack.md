@@ -215,9 +215,30 @@ Outcome. Wider prompts and performance measurements remain outside this repair.
 
 ## Owed
 
-- Final integrated build, fresh review and operator verification evidence before
-  the authorized fork landing. The owning issues are listed in Ownership and
-  the in-flow CPU composition section.
+No remaining work for this repair's declared CPU gate. The owning model row's
+other multimodal and performance obligations are unchanged.
+
+## Final verification
+
+Fresh scoped mutation review passes at `d3e529b28`. The independent upstream
+CPU-only Release build completes all 636 build steps. The operator reruns the
+CT, shared GeGLU and dual RMSNorm tests on that build: 3 of 3 pass. The newly
+built public API independently repeats the 16 of 16 greedy token match on the
+real checkpoint. It produces the same IDs recorded in Outcome.
+
+The authorized upstream pull merges `2359732b3` into the fork and retains both
+AVX2 and NEON Q4_K dispatch. Fresh merge review passes at `94264fccc`. The
+operator reruns the merged quantized-dot suite: 35 cases and 285691 assertions
+pass, as does the merged shared GeGLU test. No ARM execution is claimed.
+
+The complete initial repository preflight reports failures in existing
+release-contract mutation, role, rocprof fault-injection, capture-output,
+tools and Windows-portability suites. A repeated rocprof case fails because
+Python 3.14 raises MemoryError while importing ctypes under the test's injected
+page-size fault, before the expected diagnostic. Canonical records, conflict
+markers and current commit style pass. No checker is weakened. A final fork
+preflight is retained separately; these baseline failures are not reported as
+product gate failures or as passing checks.
 
 ## In-flow CPU composition defect
 
