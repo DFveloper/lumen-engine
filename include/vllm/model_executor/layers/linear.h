@@ -109,6 +109,30 @@ class DenseShardMlpGateUpMethod : public MlpGateUpMethodBase {
   int64_t intermediate_;
 };
 
+// Original-format GeGLU uses the shared contraction group and activation tail.
+class DenseShardMlpGateUpGeluMethod : public MlpGateUpMethodBase {
+ public:
+  DenseShardMlpGateUpGeluMethod(const std::vector<OwnedTensor>* parts,
+                                int64_t intermediate)
+      : parts_(parts), intermediate_(intermediate) {}
+  DBuf Apply(Dev d, const vt::Tensor& x) const override {
+    VT_CHECK(parts_ != nullptr && parts_->size() == 2 && intermediate_ > 0,
+             "dense GeGLU shards require exactly two weights and a positive width");
+    vt::Tensor weights[] = {ResidentWeight(d, (*parts_)[0]), ResidentWeight(d, (*parts_)[1])};
+    DBuf gate(d, vt::DType::kBF16, {x.shape[0], intermediate_});
+    DBuf up(d, vt::DType::kBF16, {x.shape[0], intermediate_});
+    DBuf out(d, vt::DType::kBF16, {x.shape[0], intermediate_});
+    vt::Tensor products[] = {gate.t(), up.t()};
+    vt::MergedGemmDense(d.q, vt::kDenseGateUpGeluShards, products, x, weights, 2,
+                         &out.t());
+    return out;
+  }
+  const char* Name() const override { return "dense-shard-gate-up-gelu"; }
+ private:
+  const std::vector<OwnedTensor>* parts_;
+  int64_t intermediate_;
+};
+
 // Unquantized (bf16) gate_up: one MatmulBT over the merged [2I,H] weight then
 // vt::SiluAndMul — byte-for-byte the inline bf16 MLP path.
 class UnquantizedMlpGateUpMethod : public MlpGateUpMethodBase {

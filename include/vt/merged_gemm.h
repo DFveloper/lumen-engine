@@ -38,6 +38,8 @@ enum class MergedEpilogue : uint8_t {
   // limit=+inf reduces to the standard silu(g)·u SwiGLU MLP. Matches
   // QuantDotGemmGroupedFusedSwiGLUKernel (cuda_quant_dot.cu) / ClampedSwiGLUKernel.
   kSiluMulClamp,
+  // arity-2 tanh GeGLU: out = gelu(gate, approximate="tanh") * up.
+  kGeluMul,
 };
 
 // A merged-GEMM group. constexpr-POD like FusedRecipe: pure description, no state.
@@ -75,6 +77,9 @@ inline constexpr MergedGemmGroup kDenseQkvShards = {
     3, MergedEpilogue::kNone, kNoMergedFastOp, "dense_qkv_shards"};
 inline constexpr MergedGemmGroup kDenseGateUpShards = {
     2, MergedEpilogue::kSiluMulClamp, kNoMergedFastOp, "dense_gate_up_shards"};
+
+inline constexpr MergedGemmGroup kDenseGateUpGeluShards = {
+    2, MergedEpilogue::kGeluMul, kNoMergedFastOp, "dense_gate_up_gelu_shards"};
 
 // Dense composite realization with original weight formats. products and
 // weights have desc.arity entries. SwiGLU uses the plain, unclamped reduction
