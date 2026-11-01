@@ -443,11 +443,17 @@ case stays so the token loop keeps coverage. `test_ops_paged_attn` and
 hold decode, sliding-window, sink and block-spanning cases.
 
 **Mutations the reviewer must apply.** `nr = total_q * hq` reduced by one (an
-unwritten last output element); `h` shifted by one (a head pair written by the
-wrong head); the `qrow` cache key never advanced (every token after the first
-reuses the first query row); `probs` not re-`assign`ed between pairs (the
-previous pair's weights leak into the softmax). Each must fail a shipped
-assertion, not merely change a number.
+unwritten last output element); the shifted-store form of `h` (compute from
+`(h+1)%hq` and store at the pair's `h`, or the reverse) — 1586 failures in
+`test_ops_paged_attn` plus 171 in the dtype suite, with the threadpool battery
+green because it is blind to a deterministic mapping error; the `qrow` cache
+key never advanced (every token after the first reuses the first query row);
+the per-pair `probs` scratch no longer sized — the `assign` is the only sizing,
+so deleting it ends the run in SIGSEGV rather than an assertion. Shifting `h`
+itself is a pure relabelling and fails nothing, and a sized-but-unzeroed
+`probs` is green everywhere, because pass 1 writes every `probs[j-jmin]` that
+pass 2 reads. A mutation must produce an observed failure, not merely a
+different number.
 
 **Gates.** Same-binary interleaved A/B on the serving host, 18 threads, greedy
 32 tokens, at least three pairs; byte-identical greedy output between arms;

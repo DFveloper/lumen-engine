@@ -495,9 +495,11 @@ std::vector<std::vector<uint8_t>> RunBattery(Threadpool& pool) {
   // The kernel splits the flat (token, q-head) output range, so this shape
   // hands the pool eight independent work items where the prefill case above
   // hands it one query row. Fifteen keys (the query plus fourteen past
-  // positions) span four pages through a NON-identity block table, so a head
-  // pair that reads another q-head, or a q/kv head mapping off by one, changes
-  // the bytes; a split extent one head short leaves the last head unwritten.
+  // positions) span four pages through a NON-identity block table. This case
+  // pins the output extent (no output word is left unwritten) and agreement
+  // across pool sizes; the head mapping itself is pinned by
+  // tests/vt/test_ops_paged_attn.cpp:463 and
+  // tests/vt/test_ops_paged_attn_dtype.cpp:421.
   {
     const float kSentinel = std::numeric_limits<float>::quiet_NaN();
     const int64_t T = 1, Hq = 8, Hk = 2, D = 16, bs = 4;
@@ -560,8 +562,9 @@ std::vector<std::vector<uint8_t>> RunBattery(Threadpool& pool) {
   // that token inside one chunk. A chunk wider than a token is the only shape
   // that can reuse a stale row, and at one thread the whole range is a single
   // chunk. The reference is the same query already widened to f32, which skips
-  // the cache entirely, so a cache key that never advances changes bytes here
-  // at every pool size, and a head offset inside the row changes them too.
+  // the cache entirely, so a cache key that never advances changes bytes only
+  // at pool sizes whose chunk exceeds one token (1 and 3 here; at 20 the chunk
+  // is four pairs against Hq = 8 and never spans two tokens).
   {
     const int64_t T = 40, Hq = 8, Hk = 2, D = 8, bs = 4;
     const int64_t nblocks = (T + bs - 1) / bs;  // 10
