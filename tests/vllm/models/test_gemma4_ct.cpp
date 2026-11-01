@@ -308,3 +308,18 @@ TEST_CASE("gemma4 CT absent V shares K independently of the global flag") {
   CHECK(w.layers[0].k_eq_v);
  }
 }
+
+TEST_CASE("gemma4 CT rejects declared KV quantization through production loading") {
+ Fixture f;auto cfg=f.Write();
+ auto shards=std::make_shared<std::vector<vllm::SafetensorsFile>>();
+ shards->push_back(vllm::SafetensorsFile::Open((f.dir/"model.safetensors").string()));
+ auto load=[&] {return vllm::ModelRegistry::Load(cfg,vllm::ModelSource::FromSafetensorsOwned(shards));};
+ CHECK_NOTHROW(load());
+ cfg.raw["quantization_config"]["kv_cache_scheme"]=nullptr;
+ CHECK_NOTHROW(load());
+ for(const json& declaration:{json{{"type","float"},{"num_bits",8},{"strategy","tensor"},
+                                  {"dynamic",false},{"symmetric",true}},json::object(),json("fp8")}) {
+  cfg.raw["quantization_config"]["kv_cache_scheme"]=declaration;
+  CHECK_THROWS_WITH_AS(load(),doctest::Contains("kv_cache_scheme"),std::runtime_error);
+ }
+}

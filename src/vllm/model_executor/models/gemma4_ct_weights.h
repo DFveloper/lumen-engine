@@ -14,7 +14,13 @@ class Reader {
   Reader(const TensorResolver& get, const nlohmann::json& raw)
       : get_(get),
         config_(layers::compressed_tensors::Config::FromHfConfigRaw(raw)),
-        quant_(layers::compressed_tensors::QuantizationConfigOf(raw)) {}
+        quant_(layers::compressed_tensors::QuantizationConfigOf(raw)) {
+    if (quant_ != nullptr) {
+      const auto kv = quant_->find("kv_cache_scheme");
+      VT_CHECK(kv == quant_->end() || kv->is_null(),
+               "gemma4 CT: kv_cache_scheme is not implemented for the CPU arm");
+    }
+  }
 
   OwnedTensor Plain(const std::string& name, const std::vector<int64_t>& shape,
                     bool preserve_f16 = false) const {
