@@ -380,3 +380,96 @@ remaining gap is small but not closed.
 **Evidence.** `evidence/gsq-lumen-w5-20261101/` in the serving deployment
 (`README.md`, `ab-calm-20261101.json`, `verify-before/`, `verify-after/`,
 `verify-live2/`).
+
+## W6 — paged attention splits tokens, so decode runs every q head inline
+
+**Status:** specified 2026-11-01 on the W5 tree; issue
+[ISSUE-LOCAL-01M6A7PTZC5T44XE7FCG4F2JHQ](../issues/QUANT-GGUF-CPU-THREADPOOL/ISSUE-LOCAL-01M6A7PTZC5T44XE7FCG4F2JHQ.md).
+This commit adds the plan only.
+
+**What W5 left measured.** `kPagedAttention` was second in the W5 inline table:
+1,596 calls, 0.303 s of a 6.7-7.0 s 32-token greedy request, 190 us per call.
+The kernel partitions the **query-token** axis only
+([cpu_paged_attn.cpp:341](../../src/vt/cpu/cpu_paged_attn.cpp#L341)), so at
+decode `total_q == 1`, `ParallelForRows` takes its `nr == 1` inline fallback,
+and the caller runs all `hq` heads of the layer while the pool spins.
+
+**Re-profiled on the W5 tree, 2026-11-01.** The same `VT_POOL_GAP` build,
+linked from the deployment archive with the W5 `cpu_ops`/`cpu_layernorm`
+objects, one 8-token warm-up plus two 32-token greedy requests (72 tokens),
+18 threads, load 7.7: inline total 0.686 s. `PagedAttentionKernel` is now the
+largest inline site by a wide margin at 2,898 calls and 0.4606 s (158.9 us per
+call, 0.214 s per 32-token request, 4.0 % of the 5.27 s wall). The W5
+conversions no longer appear in the inline table at all. Next after it:
+`RmsNormKernel` 14,559 calls and 0.1833 s (0.081 s per request, 1.5 %).
+
+**Design.** Split the flat `token x q-head` range: `nr = total_q * hq`, and map
+index `i` inside a chunk to `t = i / hq`, `h = i % hq`. Every output element
+`out[(t*hq + h)*d_v .. +d_v)` is already produced independently by exactly one
+iteration of the existing head loop
+([cpu_paged_attn.cpp:367-439](../../src/vt/cpu/cpu_paged_attn.cpp#L367)), and
+the per-token values `r`, `p`, `seqlen`, `jmin`, `jmax` come from the
+pre-computed `tok_*` arrays, so the chunk body can recompute them from `t`
+without a barrier or a cross-chunk reduction. The scratch that today lives
+above the token loop (`probs`, `acc`, `qrow`) moves inside the (t, h) body and
+is reused across the pairs of one chunk: `probs` is re-`assign`ed per pair and
+`acc` is re-zeroed, exactly as the token loop does today. `qrow` stays a
+per-token widening and is cached on the last `t` a chunk visited, because flat
+index order is monotone in `t`; a chunk that spans several heads of one token
+still widens that token once.
+
+**Bit-identity.** Each `(t, h)` pair keeps the identical expression, the
+identical sequential pass order over its own keys and the identical rounding;
+the change only moves which thread executes the pair. No cross-head or
+cross-token reduction exists to change shape. Duplicate `qrow` widening across
+chunks is read-only, so it cannot reorder arithmetic. The gate proves the claim
+rather than assuming it.
+
+**Upstream anchors.** ggml splits attention over the query head axis inside
+`ggml_compute_forward_flash_attn_ext_f16`
+(`ggml/src/ggml-cpu/ops.cpp:9131-9140`, the `for (q_head ...)` loop at oracle
+pin b10451 `10bf611e`). At decode with `nek1 >= 512` it additionally splits the
+KV axis into `(nek1 + nth - 1) / nth` chunks per thread and merges partial
+softmax terms (`:9115-9130` in the same file); this change does **not** take
+that axis, because a KV split changes the softmax reduction order and the
+strict goldens require the sequential order. The extent idiom is the
+`ith`/`nth` split W5 already uses (`ops.cpp:2129-2152`).
+
+**Tests.** A decode-shaped `PagedAttention` case (`T=1`, `Hq=8`, `Hk=2`, `D=8`,
+`block_size=4`, causal) must exist in the threadpool determinism battery and
+agree byte for byte at 1, 3 and 20 pool threads; the existing 37-token prefill
+case stays so the token loop keeps coverage. `test_ops_paged_attn` and
+`test_ops_paged_attn_dtype` must stay green unchanged, because they already
+hold decode, sliding-window, sink and block-spanning cases.
+
+**Mutations the reviewer must apply.** `nr = total_q * hq` reduced by one (an
+unwritten last output element); `h` shifted by one (a head pair written by the
+wrong head); the `qrow` cache key never advanced (every token after the first
+reuses the first query row); `probs` not re-`assign`ed between pairs (the
+previous pair's weights leak into the softmax). Each must fail a shipped
+assertion, not merely change a number.
+
+**Gates.** Same-binary interleaved A/B on the serving host, 18 threads, greedy
+32 tokens, at least three pairs; byte-identical greedy output between arms;
+`verify.py --expect-cache on` against the live deployment; and a prefill check
+that the first-token latency of a long prompt does not regress beyond the
+run-to-run spread, because prefill is the shape where the flat split changes
+chunk composition.
+
+**Expected gain.** Inline cost 0.303 s per 32-token request, of which the eight
+q heads per layer are the natural units; the pool can retire a call in about
+one head plus one kick. The measured wall gain is recorded in the result
+section, not assumed here.
+
+**Stop conditions.** Stop and return `NEEDS_DECISION` if the split cannot keep
+one thread per output element, if any A/B run changes a single output byte
+without an explained arithmetic reason, or if prefill regresses beyond the
+spread while the decode gain is inside it.
+
+## Owed
+
+- ISSUE-LOCAL-01M6A8SZSN03ZNFY8Y7HB6M7TZ: the served Lumen-3.8-Flare binary cannot
+  be reproduced from main. The GGUF KV array budget (1e6 against this artifact's
+  1,301,418 elements) and the `gemma4` GGUF architecture exist only in the
+  deployment scratch tree, so W6 measures on a binary linked from the deployment
+  archive and the fix needs its own row.
