@@ -32,4 +32,8 @@ Stop for product arithmetic changes, unavailable architecture coverage, or an un
 
 ## Now
 
-Implementation pending. Arm execution requires a DotProd host and remains unavailable on this x86 host.
+Implementation complete. Fresh review is pending. Arm execution requires a DotProd host and remains unavailable on this x86 host.
+
+## Outcome
+
+On 1 November 2026, the adapted NEON suite passed default and forced AVX2 selection with 5 cases and 260 assertions each. Portable selection passed 5 cases and 516 assertions. The independent quant-dot suite passed 35 cases and 285691 assertions per selection. Product defaults and arithmetic do not change. Arm execution remains unavailable on this x86 host. The repository preflight retains the pre-existing stale `KERNEL-ATTN-DFLASH-BLOCK` anchor failure. Normal archive linking exceeds disk quota, so focused tests link the same compiled objects through a thin archive.
