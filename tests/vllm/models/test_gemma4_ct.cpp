@@ -255,3 +255,56 @@ TEST_CASE("gemma4 CT refuses unsupported bit widths and declared tensor metadata
     doctest::Contains("self_attn.q_proj"),std::runtime_error);
  }
 }
+
+TEST_CASE("gemma4 CT explicit V overrides the global sharing flag") {
+ const std::string module="model.language_model.layers.0.self_attn.v_proj";
+ for(bool plain_v:{false,true}) {
+  Fixture f;auto cfg=f.Write();
+  if(plain_v) {
+   f.Half(module+".weight",{32,32},0.1875f);
+   cfg.raw["quantization_config"]["ignore"]={module};
+   for(const auto* suffix:{".weight_packed",".weight_scale",".weight_shape"})
+    f.header.erase(module+suffix);
+   f.Save();
+  }
+  cfg.raw["text_config"]["attention_k_eq_v"]=false;
+  const auto distinct=Run(f,cfg);
+  cfg.raw["text_config"]["attention_k_eq_v"]=true;
+  const auto stale_flag=Run(f,cfg);
+  REQUIRE(distinct.size()==stale_flag.size());
+  for(size_t i=0;i<distinct.size();++i)CHECK(distinct[i]==stale_flag[i]);
+  auto shards=std::make_shared<std::vector<vllm::SafetensorsFile>>();
+  shards->push_back(vllm::SafetensorsFile::Open((f.dir/"model.safetensors").string()));
+  auto w=vllm::LoadGemma4ForConditionalGenerationWeightsOwned(shards,cfg);
+  CHECK_FALSE(w.layers[0].k_eq_v);
+ }
+}
+
+TEST_CASE("gemma4 CT absent V shares K independently of the global flag") {
+ const std::string base="model.language_model.layers.0.self_attn.";
+ Fixture tied;auto cfg=tied.Write();
+ for(const auto* suffix:{".weight_packed",".weight_scale",".weight_shape"}) {
+  const auto& key=tied.header.at(base+"k_proj"+suffix);
+  const auto& value=tied.header.at(base+"v_proj"+suffix);
+  const size_t src=key["data_offsets"][0].get<size_t>();
+  const size_t dst=value["data_offsets"][0].get<size_t>();
+  const size_t count=key["data_offsets"][1].get<size_t>()-src;
+  std::memcpy(tied.payload.data()+dst,tied.payload.data()+src,count);
+ }
+ tied.Save();
+ cfg.raw["text_config"]["attention_k_eq_v"]=false;
+ const auto explicit_tie=Run(tied,cfg);
+ for(const auto* suffix:{".weight_packed",".weight_scale",".weight_shape"})
+  tied.header.erase(base+"v_proj"+suffix);
+ tied.Save();
+ for(bool flag:{false,true}) {
+  cfg.raw["text_config"]["attention_k_eq_v"]=flag;
+  const auto implicit_tie=Run(tied,cfg);
+  REQUIRE(explicit_tie.size()==implicit_tie.size());
+  for(size_t i=0;i<explicit_tie.size();++i)CHECK(explicit_tie[i]==implicit_tie[i]);
+  auto shards=std::make_shared<std::vector<vllm::SafetensorsFile>>();
+  shards->push_back(vllm::SafetensorsFile::Open((tied.dir/"model.safetensors").string()));
+  auto w=vllm::LoadGemma4ForConditionalGenerationWeightsOwned(shards,cfg);
+  CHECK(w.layers[0].k_eq_v);
+ }
+}

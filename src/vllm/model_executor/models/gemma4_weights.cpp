@@ -390,7 +390,8 @@ Gemma4Weights LoadCt(const TensorResolver& get,
     v.post_feedforward_layernorm = reader.Plain(b + "post_feedforward_layernorm.weight", {H});
     if (names.count(b + "layer_scalar"))
       v.layer_scalar = reader.Plain(b + "layer_scalar", {1});
-    v.k_eq_v = RawBool(text, "attention_k_eq_v", false);
+    v.k_eq_v = names.count(b + "self_attn.v_proj.weight_packed") == 0 &&
+               names.count(b + "self_attn.v_proj.weight") == 0;
     v.attn.qkv_parts.push_back(reader.Linear(b + "self_attn.q_proj", qn, H));
     v.attn.qkv_parts.push_back(reader.Linear(b + "self_attn.k_proj", kn, H));
     v.attn.qkv_parts.push_back(v.k_eq_v
