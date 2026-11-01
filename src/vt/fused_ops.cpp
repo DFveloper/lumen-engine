@@ -1,5 +1,6 @@
 #include "vt/fused_ops.h"
 
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -46,6 +47,15 @@ void DualRmsNormPlusRes(Queue& q, Tensor& out, const Tensor& x1, const Tensor& w
   VT_CHECK(x1.rank == 2 && x1.shape[0] > 0 && x1.shape[1] > 0 &&
                (x1.dtype == DType::kBF16 || x1.dtype == DType::kF32),
            "DualRmsNormPlusRes: expected a nonempty BF16/F32 matrix");
+  // Validate the count before IsContiguous/Numel can multiply signed extents.
+  VT_CHECK(x1.shape[0] <= std::numeric_limits<int64_t>::max() / x1.shape[1],
+           "DualRmsNormPlusRes: matrix element count overflow");
+  const uint64_t elements = static_cast<uint64_t>(x1.shape[0]) *
+                            static_cast<uint64_t>(x1.shape[1]);
+  const size_t element_bytes = SizeOf(x1.dtype);
+  VT_CHECK(elements <= std::numeric_limits<size_t>::max() / element_bytes,
+           "DualRmsNormPlusRes: matrix byte count overflow");
+  const size_t bytes = static_cast<size_t>(elements) * element_bytes;
   for (const Tensor* t : std::initializer_list<const Tensor*>{&x2, &residual, &out}) {
     VT_CHECK(t->rank == 2 && t->shape[0] == x1.shape[0] &&
                  t->shape[1] == x1.shape[1] && t->dtype == x1.dtype &&
@@ -54,8 +64,8 @@ void DualRmsNormPlusRes(Queue& q, Tensor& out, const Tensor& x1, const Tensor& w
   }
   // CPU scratch retains each intermediate's declared dtype rounding. Do not
   // write out until both inputs and all weights are consumed: out may alias them.
-  const size_t words = x1.Bytes() / sizeof(uint32_t) +
-                       (x1.Bytes() % sizeof(uint32_t) != 0);
+  const size_t words = bytes / sizeof(uint32_t) +
+                       (bytes % sizeof(uint32_t) != 0);
   std::vector<uint32_t> storage1(words), storage2(words);
   Tensor n1 = Tensor::Contiguous(storage1.data(), x1.dtype, q.device,
                                 {x1.shape[0], x1.shape[1]});

@@ -1,9 +1,21 @@
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 #include "vt/fused_ops.h"
 #include "vt/ops.h"
+#include "vt/op_provider.h"
+
+namespace {
+bool oversized_dispatched = false;
+void RejectOversizedDispatch(vt::Queue&, vt::Tensor&, const vt::Tensor&,
+                             const vt::Tensor&, const vt::RmsNormArgs&, vt::Tensor*) {
+  oversized_dispatched = true;
+  throw std::runtime_error("oversized RMSNorm reached provider");
+}
+}
+
 
 int main() {
   using namespace vt;
@@ -46,6 +58,29 @@ int main() {
       try { DualRmsNormPlusRes(q, out, x1, z1, bad, z2, z3, r, args); } catch (const std::exception&) { rejected = true; }
       if (!rejected) throw std::runtime_error("malformed shape accepted");
     }
+  }
+  // Keep the broken byte-wrap path safe: its zero-byte allocation reaches this
+  // provider, which records dispatch and throws before touching tensor memory.
+  RegisterOpProvider(OpId::kRmsNorm, DeviceType::kCPU,
+                     {"overflow-test", 1000, nullptr,
+                      reinterpret_cast<void*>(static_cast<RmsNormFn>(&RejectOversizedDispatch))});
+  float scalar = 1.0F;
+  Tensor weight = Tensor::Contiguous(&scalar, DType::kF32, q.device, {4});
+  for (int64_t rows : {int64_t{1} << 60, int64_t{1} << 62}) {
+    // Set metadata directly so constructing the negative fixture cannot overflow.
+    Tensor huge{};
+    huge.data = &scalar; huge.dtype = DType::kF32; huge.device = q.device;
+    huge.rank = 2; huge.shape[0] = rows; huge.shape[1] = 4;
+    huge.stride[0] = 4; huge.stride[1] = 1;
+    auto destination = huge;
+    oversized_dispatched = false;
+    bool rejected = false;
+    try {
+      DualRmsNormPlusRes(q, destination, huge, weight, huge, weight,
+                         weight, huge, RmsNormArgs{1e-5, false});
+    } catch (const std::exception&) { rejected = true; }
+    if (!rejected || oversized_dispatched)
+      throw std::runtime_error("oversized dual RMS norm was not rejected before dispatch");
   }
   std::cout << "BF16/F32 dual RMS norm, Gemma offset, aliases, malformed shape PASS\n";
 }
