@@ -172,9 +172,9 @@ The implementing engine's real-model numerical comparison remains pending.
 
 ## Owed
 
-- `ISSUE-LOCAL-01M6AS6AFMM9G0D76SKPJGT9SH`: connect the staged shared GeGLU
-  descriptor to the production Gemma4 CT loader and registered forward in this
-  PR, then complete the declared tests, fresh review and operator verification.
+- Connect the staged shared GeGLU descriptor to the production Gemma4 CT loader
+  and registered forward in this PR, then complete the declared tests, fresh
+  review and operator verification. The owning issue is listed in Ownership.
 
 ## In-flow CPU composition defect
 
